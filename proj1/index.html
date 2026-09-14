@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project 1 — Images of the Russian Empire</title>
+  <meta name="description" content="CS180 Project 1 — colorizing the Prokudin-Gorskii glass-plate collection with single-scale and pyramid alignment.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='18' height='18' rx='2' fill='none' stroke='%234A6B8A' stroke-width='2'/%3E%3Crect x='8' y='8' width='18' height='18' rx='2' fill='none' stroke='%235F7A4A' stroke-width='2'/%3E%3Crect x='12' y='12' width='18' height='18' rx='2' fill='none' stroke='%238A4A42' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Jost:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    document.documentElement.classList.add('js');
+    if (/[?&]pdf/.test(location.search)) {
+      document.documentElement.classList.add('no-anim', 'print-mode');
+    }
+    window.__animBooted = false;
+    setTimeout(function () {
+      if (!window.__animBooted) document.documentElement.classList.add('no-anim');
+    }, 4000);
+  </script>
+</head>
+<body>
+
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div id="loader" aria-hidden="true">
+    <svg class="iris" width="100%" height="100%">
+      <defs>
+        <mask id="iris-mask">
+          <rect width="100%" height="100%" fill="#fff"></rect>
+          <circle class="iris-hole" cx="50%" cy="50%" r="0" fill="#000"></circle>
+        </mask>
+      </defs>
+      <rect width="100%" height="100%" fill="#262015" mask="url(#iris-mask)"></rect>
+    </svg>
+    <div class="loader-mark">
+      <svg viewBox="0 0 64 64" class="loader-ring" aria-hidden="true">
+        <circle cx="32" cy="32" r="28" fill="none" stroke="#B08D57" stroke-width="1.5" pathLength="100"></circle>
+        <circle cx="32" cy="32" r="12" fill="none" stroke="#B08D57" stroke-width="1" pathLength="100"></circle>
+      </svg>
+      <p>CS180 · PROJECT 1</p>
+    </div>
+  </div>
+
+  <header class="nav" id="nav">
+    <a class="nav-name" href="#top">Andrew&nbsp;Boldi</a>
+    <div class="nav-right">
+      <nav class="nav-links" aria-label="Sections">
+        <a class="nav-home" href="../">Index</a>
+        <a href="#part-1">01<span class="nav-label"> · Single-scale</span></a>
+        <a href="#part-2">02<span class="nav-label"> · Pyramid</span></a>
+        <a href="#part-3">03<span class="nav-label"> · Failure</span></a>
+        <a href="#part-4">04<span class="nav-label"> · Mine</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="smooth-wrapper">
+    <div id="smooth-content">
+      <main id="top">
+
+        <p class="print-url" aria-hidden="true">https://andrewboldi.github.io/cs180/proj1/</p>
+
+        <section class="hero">
+          <p class="eyebrow hero-eyebrow">CS180 · Intro to Computer Vision &amp; Computational Photography · Fall 2026</p>
+          <h1 class="hero-title">
+            <span class="line-mask" data-speed="1.05"><span class="line">Images of the</span></span>
+            <span class="line-mask" data-speed="0.96"><span class="line"><em class="accent">Russian Empire</em></span></span>
+          </h1>
+          <p class="hero-sub" data-speed="0.985">Colorizing the Prokudin-Gorskii glass-plate collection — three exposures through three filters, registered into one photograph a century later.</p>
+          <div class="exif-strip" aria-hidden="true">
+            <span>Proj&nbsp;01</span><span id="tick-name">Cathedral</span><span id="tick-g">G&nbsp;(+2,&nbsp;+5)</span><span id="tick-r">R&nbsp;(+3,&nbsp;+12)</span><span>Berkeley,&nbsp;CA</span>
+          </div>
+          <div class="scroll-cue"><span>Scroll</span><i></i></div>
+        </section>
+
+        <section class="part" id="story">
+          <header class="part-head">
+            <p class="eyebrow reveal">Prologue · 1907</p>
+            <h2 class="reveal">Three plates, one scene</h2>
+            <p class="lede reveal">Sergei Prokudin-Gorskii photographed the Russian Empire in color before color film existed: every scene was exposed three times onto a glass plate, through a blue, a green, and a red filter. The Library of Congress digitized the surviving negatives as tall strips — blue on top, then green, then red.</p>
+          </header>
+          <div class="result-grid two">
+            <figure class="frame" data-speed="1.03">
+              <div class="frame-mask"><img src="media/cathedral_plate.jpg" alt="Digitized glass-plate negative: the same cathedral scene exposed three times, stacked vertically as blue, green, red"></div>
+              <figcaption data-lag="0.18">The raw negative — B, G, R, top to bottom</figcaption>
+            </figure>
+            <figure class="frame" data-speed="0.97">
+              <div class="frame-mask"><img src="media/cathedral_naive.jpg" alt="The three thirds stacked directly into RGB without alignment — colored fringes everywhere"></div>
+              <figcaption data-lag="0.18">A naive stack — nothing lines up yet</figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">The task</p>
+            <p>Cut the strip into thirds, treat the blue plate as the anchor, and recover two displacement vectors — one that seats green on blue, one that seats red on blue. The plates shifted between exposures (the camera moved, the subject breathed), so every image needs its own pair of offsets, found automatically.</p>
+          </div>
+        </section>
+
+        <section class="part" id="part-1">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 01 · Single-scale search</p>
+            <h2 class="reveal">Exhaustive, but honest</h2>
+            <p class="lede reveal">For the small JPEG plates, brute force is enough: slide the green and red channels over blue through every offset in a ±15-pixel window, score each candidate, keep the best one.</p>
+          </header>
+
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>L2 / Euclidean distance</h3>
+              <span class="math">d(A,B) = √ Σᵢⱼ ( Aᵢⱼ − Bᵢⱼ )²</span>
+              <p>Sum of squared pixel differences — lower is better. Fast and simple, but it assumes the two channels have similar brightness, which glass plates shot through different filters often do not.</p>
+            </div>
+            <div class="formula">
+              <h3>Normalized cross-correlation</h3>
+              <span class="math">ncc(A,B) = ⟨ (A−Ā)∕‖A−Ā‖ , (B−B̄)∕‖B−B̄‖ ⟩</span>
+              <p>The dot product of both channels after subtracting their means and normalizing — a cosine similarity, higher is better. Invariant to affine brightness changes between plates.</p>
+            </div>
+          </div>
+
+          <div class="notes reveal">
+            <p class="notes-label">Implementation</p>
+            <p>Scores are computed on interior pixels only — a 50-pixel margin is ignored so the plate borders can't vote. Rather than looping over the 31 × 31 = 961 candidate offsets one at a time, all shifted copies are stacked into a single array and scored in one vectorized <span class="mono-inline">einsum</span>; the whole search runs in a blink. Offsets below are written (x,&nbsp;y): positive&nbsp;x moves a plate right, positive&nbsp;y moves it down. Both metrics chose identical offsets on all three small plates.</p>
+          </div>
+
+          <div class="compare reveal" id="cmp-cathedral" data-a="media/cathedral_naive.jpg" data-b="media/cathedral_ncc.jpg">
+            <img src="media/cathedral_ncc.jpg" alt="Cathedral, aligned with NCC">
+            <div class="top"><img src="media/cathedral_naive.jpg" alt="Cathedral, unaligned naive stack"></div>
+            <div class="handle"></div>
+            <span class="tag a">Naive</span>
+            <span class="tag b">Aligned · NCC</span>
+          </div>
+
+          <div class="result-grid" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cathedral_ncc.jpg" alt="Cathedral colorized after single-scale alignment"></div>
+              <figcaption>Cathedral<span class="off">G (+2, +5) · R (+3, +12) · both metrics</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/monastery_ncc.jpg" alt="Monastery colorized after single-scale alignment"></div>
+              <figcaption>Monastery<span class="off">G (+2, -3) · R (+2, +3) · both metrics</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/tobolsk_ncc.jpg" alt="Tobolsk colorized after single-scale alignment"></div>
+              <figcaption>Tobolsk<span class="off">G (+3, +3) · R (+3, +6) · both metrics</span></figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>Monastery's green plate actually needs to move <em>up</em> (negative&nbsp;y) — a reminder that the exposures drifted in both directions. With shifts this small, L2 and NCC agree exactly; the differences between the metrics only start to matter when the plates disagree about brightness, which is coming in Part&nbsp;03.</p>
+          </div>
+        </section>
+
+        <section class="part" id="part-2">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 02 · Coarse to fine</p>
+            <h2 class="reveal">The pyramid</h2>
+            <p class="lede reveal">The full scans are ~3700 × 3200 pixels with displacements beyond a hundred pixels — exhaustive search at that size would evaluate thousands of 12-megapixel differences. The pyramid finds the big moves where pixels are cheap.</p>
+          </header>
+
+          <div class="pyramid-diagram reveal" aria-hidden="true">
+            <svg viewBox="0 0 640 190">
+              <rect x="10" y="30" width="150" height="100" rx="6" fill="none" stroke="#7C5E31" stroke-width="1.5" opacity="0.9"/>
+              <rect x="220" y="15" width="190" height="130" rx="6" fill="none" stroke="#7C5E31" stroke-width="1.2" opacity="0.65"/>
+              <rect x="470" y="0" width="160" height="160" rx="6" fill="none" stroke="#7C5E31" stroke-width="1" opacity="0.45"/>
+              <text x="18" y="150" class="lbl">coarsest scale · search ±50</text>
+              <text x="228" y="163" class="lbl">×2 offset · refine ±5</text>
+              <text x="478" y="178" class="lbl">full res · refine ±5</text>
+              <path d="M168 80 h40" stroke="#9C7A46" stroke-width="1.2" marker-end="url(#arr)"/>
+              <path d="M418 80 h40" stroke="#9C7A46" stroke-width="1.2" marker-end="url(#arr)"/>
+              <defs>
+                <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0 L10 5 L0 10 z" fill="#9C7A46"/>
+                </marker>
+              </defs>
+            </svg>
+          </div>
+
+          <div class="notes reveal">
+            <p class="notes-label">How it works</p>
+            <p>If a plate is wider than 1024 pixels, halve it (area-averaged downsample) and align the halves recursively. Whatever offset comes back is doubled — one pixel at half resolution is two at full — and then refined with a small ±5 search at the current scale. The base of the recursion, where the image is small, runs a generous ±50 search. Every level pays for only a constant-size window, so a 128-pixel displacement is discovered near the top of the pyramid for pennies and merely polished on the way down. Scoring always ignores a 10% border so the plate edges and frame damage can't dominate either metric.</p>
+          </div>
+
+          <div class="result-grid" style="margin-top: clamp(3rem, 7vh, 5rem);">
+            <figure class="frame"><div class="frame-mask"><img src="media/church_ncc.jpg" alt="Church, pyramid-aligned"></div><figcaption>Church<span class="off">L2 · G (+4, +25) · R (-4, +58)<br>NCC · G (+4, +25) · R (-4, +58)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/harvesters_ncc.jpg" alt="Harvesters, pyramid-aligned"></div><figcaption>Harvesters<span class="off">L2 · G (+16, +59) · R (+13, +124)<br>NCC · G (+17, +60) · R (+14, +124)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/icon_ncc.jpg" alt="Icon, pyramid-aligned"></div><figcaption>Icon<span class="off">L2 · G (+17, +41) · R (+23, +90)<br>NCC · G (+17, +41) · R (+23, +89)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/ilemselga_ncc.jpg" alt="Ilemselga, pyramid-aligned"></div><figcaption>Ilemselga<span class="off">L2 · G (+7, +39) · R (+11, +130)<br>NCC · G (+7, +40) · R (+11, +130)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/melons_ncc.jpg" alt="Melons, pyramid-aligned"></div><figcaption>Melons<span class="off">L2 · G (+11, +82) · R (+13, +178)<br>NCC · G (+11, +82) · R (+13, +178)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/religous_painting_ncc.jpg" alt="Religious painting, pyramid-aligned"></div><figcaption>Religious painting<span class="off">L2 · G (+3, +28) · R (+7, +68)<br>NCC · G (+3, +28) · R (+7, +68)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/self_portrait_ncc.jpg" alt="Self portrait, pyramid-aligned"></div><figcaption>Self portrait<span class="off">L2 · G (+29, +79) · R (+36, +176)<br>NCC · G (+29, +79) · R (+36, +176)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/siren_ncc.jpg" alt="Siren, pyramid-aligned"></div><figcaption>Siren<span class="off">L2 · G (-6, +49) · R (-25, +96)<br>NCC · G (-6, +49) · R (-25, +96)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/three_generations_ncc.jpg" alt="Three generations, pyramid-aligned"></div><figcaption>Three generations<span class="off">L2 · G (+14, +53) · R (+11, +112)<br>NCC · G (+14, +53) · R (+11, +112)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/wharf_ncc.jpg" alt="Wharf, pyramid-aligned"></div><figcaption>Wharf<span class="off">L2 · G (-7, +15) · R (-16, +83)<br>NCC · G (-7, +15) · R (-16, +83)</span></figcaption></figure>
+          </div>
+
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>Images shown are the NCC results; L2 landed within a pixel of NCC on every provided plate, so the two sets are visually identical. The full table of every offset, both metrics, is in the appendix below. On harvesters the red plate carries a few pixels of residual vertical fringe under both metrics — the crowd moved between exposures, so no single translation can be perfectly right everywhere.</p>
+          </div>
+        </section>
+
+        <section class="part" id="part-3">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 03 · Failure analysis</p>
+            <h2 class="reveal">Where raw pixels lie</h2>
+            <p class="lede reveal">One plate defeats brightness-based matching: the Emir of Bukhara. His robe is brilliant blue silk — blazing in the blue plate, nearly black in the red plate. The two channels genuinely disagree about what is bright.</p>
+          </header>
+
+          <div class="compare reveal" id="cmp-emir" data-a="media/emir_naive.jpg" data-b="media/emir_ncc.jpg">
+            <img src="media/emir_ncc.jpg" alt="Emir of Bukhara, NCC pyramid alignment">
+            <div class="top"><img src="media/emir_naive.jpg" alt="Emir of Bukhara, unaligned naive stack"></div>
+            <div class="handle"></div>
+            <span class="tag a">Naive</span>
+            <span class="tag b">Pyramid · NCC</span>
+          </div>
+
+          <div class="notes reveal" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <p class="notes-label">What went wrong</p>
+            <p>The pyramid gets the green plate right — G (+24, +49) · R (+56, +104) for NCC — but the red plate lands at R&nbsp;(+56, +104), roughly fifteen pixels right of where it belongs. As an independent reference I phase-correlated the raw red plate directly against the blue one, which puts the true displacement near R&nbsp;(+41, +106). Both L2 and NCC choose nearly the same wrong basin: at the pyramid's coarsest level, the inverted brightness of the robe outweighs the scene's actual structure, and every finer level then faithfully polishes a minimum that was wrong to begin with. This is the one misalignment in the set — and the classic argument for matching on gradients or edges instead of raw intensities, where the robe's brightness flip stops mattering.</p>
+          </div>
+        </section>
+
+        <section class="part" id="part-4">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 04 · From the archive</p>
+            <h2 class="reveal">Five more plates</h2>
+            <p class="lede reveal">Five additional negatives chosen from the Library of Congress collection and run through the same pyramid, untouched parameters: rivers, gardens, and a railway bridge. Both metrics agreed within a pixel on every one.</p>
+          </header>
+
+          <div class="result-grid">
+            <figure class="frame"><div class="frame-mask"><img src="media/bridge_ncc.jpg" alt="Railway bridge, pyramid-aligned"></div><figcaption>Bridge<span class="off">L2 · G (-11, +67) · R (-28, +119)<br>NCC · G (-11, +67) · R (-28, +118)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/flowers_ncc.jpg" alt="Flowers, pyramid-aligned"></div><figcaption>Flowers<span class="off">L2 · G (+19, +24) · R (+40, +121)<br>NCC · G (+19, +25) · R (+40, +121)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/forest_ncc.jpg" alt="Forest, pyramid-aligned"></div><figcaption>Forest<span class="off">L2 · G (-32, +36) · R (+7, +97)<br>NCC · G (-32, +37) · R (+7, +97)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/roses_ncc.jpg" alt="Roses, pyramid-aligned"></div><figcaption>Roses<span class="off">L2 · G (+8, +8) · R (+13, +60)<br>NCC · G (+8, +8) · R (+13, +60)</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/stream_and_mountains_ncc.jpg" alt="Stream and mountains, pyramid-aligned"></div><figcaption>Stream &amp; mountains<span class="off">L2 · G (+51, +33) · R (+101, +85)<br>NCC · G (+50, +32) · R (+101, +85)</span></figcaption></figure>
+          </div>
+        </section>
+
+        <section class="part" id="appendix">
+          <header class="part-head">
+            <p class="eyebrow reveal">Appendix</p>
+            <h2 class="reveal">Every offset</h2>
+            <p class="lede reveal">All displacement vectors, both metrics, for all seventeen plates. Written (x,&nbsp;y): positive&nbsp;x moves the plate right, positive&nbsp;y down, relative to the blue anchor.</p>
+          </header>
+          <div class="offsets-wrap reveal">
+            <table class="offsets-table">
+              <thead>
+                <tr><th>Plate</th><th>Method</th><th>L2 · G</th><th>L2 · R</th><th>NCC · G</th><th>NCC · R</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>cathedral</td><td>single-scale</td><td>(+2, +5)</td><td>(+3, +12)</td><td>(+2, +5)</td><td>(+3, +12)</td></tr>
+                <tr><td>monastery</td><td>single-scale</td><td>(+2, -3)</td><td>(+2, +3)</td><td>(+2, -3)</td><td>(+2, +3)</td></tr>
+                <tr><td>tobolsk</td><td>single-scale</td><td>(+3, +3)</td><td>(+3, +6)</td><td>(+3, +3)</td><td>(+3, +6)</td></tr>
+                <tr><td>church</td><td>pyramid</td><td>(+4, +25)</td><td>(-4, +58)</td><td>(+4, +25)</td><td>(-4, +58)</td></tr>
+                <tr class="flag"><td>emir</td><td>pyramid</td><td>(+24, +49)</td><td>(+57, +103)</td><td>(+24, +49)</td><td>(+56, +104)</td></tr>
+                <tr><td>harvesters</td><td>pyramid</td><td>(+16, +59)</td><td>(+13, +124)</td><td>(+17, +60)</td><td>(+14, +124)</td></tr>
+                <tr><td>icon</td><td>pyramid</td><td>(+17, +41)</td><td>(+23, +90)</td><td>(+17, +41)</td><td>(+23, +89)</td></tr>
+                <tr><td>ilemselga</td><td>pyramid</td><td>(+7, +39)</td><td>(+11, +130)</td><td>(+7, +40)</td><td>(+11, +130)</td></tr>
+                <tr><td>melons</td><td>pyramid</td><td>(+11, +82)</td><td>(+13, +178)</td><td>(+11, +82)</td><td>(+13, +178)</td></tr>
+                <tr><td>religous painting</td><td>pyramid</td><td>(+3, +28)</td><td>(+7, +68)</td><td>(+3, +28)</td><td>(+7, +68)</td></tr>
+                <tr><td>self portrait</td><td>pyramid</td><td>(+29, +79)</td><td>(+36, +176)</td><td>(+29, +79)</td><td>(+36, +176)</td></tr>
+                <tr><td>siren</td><td>pyramid</td><td>(-6, +49)</td><td>(-25, +96)</td><td>(-6, +49)</td><td>(-25, +96)</td></tr>
+                <tr><td>three generations</td><td>pyramid</td><td>(+14, +53)</td><td>(+11, +112)</td><td>(+14, +53)</td><td>(+11, +112)</td></tr>
+                <tr><td>wharf</td><td>pyramid</td><td>(-7, +15)</td><td>(-16, +83)</td><td>(-7, +15)</td><td>(-16, +83)</td></tr>
+                <tr><td>bridge</td><td>pyramid</td><td>(-11, +67)</td><td>(-28, +119)</td><td>(-11, +67)</td><td>(-28, +118)</td></tr>
+                <tr><td>flowers</td><td>pyramid</td><td>(+19, +24)</td><td>(+40, +121)</td><td>(+19, +25)</td><td>(+40, +121)</td></tr>
+                <tr><td>forest</td><td>pyramid</td><td>(-32, +36)</td><td>(+7, +97)</td><td>(-32, +37)</td><td>(+7, +97)</td></tr>
+                <tr><td>roses</td><td>pyramid</td><td>(+8, +8)</td><td>(+13, +60)</td><td>(+8, +8)</td><td>(+13, +60)</td></tr>
+                <tr><td>stream and mountains</td><td>pyramid</td><td>(+51, +33)</td><td>(+101, +85)</td><td>(+50, +32)</td><td>(+101, +85)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="convention reveal">emir rows flagged — see part 03 · offsets recovered from the saved outputs by phase correlation</p>
+        </section>
+
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <span>blue · green · red · shift · score · refine · repeat&nbsp;·&nbsp;</span>
+            <span>blue · green · red · shift · score · refine · repeat&nbsp;·&nbsp;</span>
+          </div>
+        </div>
+
+        <footer class="colophon">
+          <p class="colophon-title reveal">A century, registered.</p>
+          <div class="colophon-meta reveal">
+            <p>Andrew Boldi — CS180: Intro to Computer Vision &amp; Computational Photography<br>UC Berkeley · Fall 2026</p>
+            <p class="colophon-links">
+              <a href="https://cal-cs180.github.io/fa26/hw/proj1/index.html">Assignment ↗</a>
+              <span aria-hidden="true">·</span>
+              <a href="https://www.loc.gov/collections/prokudin-gorskii/">The collection ↗</a>
+              <span aria-hidden="true">·</span>
+              <a href="../">All projects ↗</a>
+            </p>
+            <p class="colophon-fine">Built with Three.js + GSAP · type RGB to shuffle the plates · drag the sliders</p>
+          </div>
+        </footer>
+
+      </main>
+    </div>
+  </div>
+
+  <script>window.OFFSETS = {"bridge": {"euclidean": {"g": [67, -11], "r": [119, -28]}, "ncc": {"g": [67, -11], "r": [118, -28]}}, "cathedral": {"euclidean": {"g": [5, 2], "r": [12, 3]}, "ncc": {"g": [5, 2], "r": [12, 3]}}, "church": {"euclidean": {"g": [25, 4], "r": [58, -4]}, "ncc": {"g": [25, 4], "r": [58, -4]}}, "emir": {"euclidean": {"g": [49, 24], "r": [103, 57]}, "ncc": {"g": [49, 24], "r": [104, 56]}}, "flowers": {"euclidean": {"g": [24, 19], "r": [121, 40]}, "ncc": {"g": [25, 19], "r": [121, 40]}}, "forest": {"euclidean": {"g": [36, -32], "r": [97, 7]}, "ncc": {"g": [37, -32], "r": [97, 7]}}, "harvesters": {"euclidean": {"g": [59, 16], "r": [124, 13]}, "ncc": {"g": [60, 17], "r": [124, 14]}}, "icon": {"euclidean": {"g": [41, 17], "r": [90, 23]}, "ncc": {"g": [41, 17], "r": [89, 23]}}, "ilemselga": {"euclidean": {"g": [39, 7], "r": [130, 11]}, "ncc": {"g": [40, 7], "r": [130, 11]}}, "melons": {"euclidean": {"g": [82, 11], "r": [178, 13]}, "ncc": {"g": [82, 11], "r": [178, 13]}}, "monastery": {"euclidean": {"g": [-3, 2], "r": [3, 2]}, "ncc": {"g": [-3, 2], "r": [3, 2]}}, "religous_painting": {"euclidean": {"g": [28, 3], "r": [68, 7]}, "ncc": {"g": [28, 3], "r": [68, 7]}}, "roses": {"euclidean": {"g": [8, 8], "r": [60, 13]}, "ncc": {"g": [8, 8], "r": [60, 13]}}, "self_portrait": {"euclidean": {"g": [79, 29], "r": [176, 36]}, "ncc": {"g": [79, 29], "r": [176, 36]}}, "siren": {"euclidean": {"g": [49, -6], "r": [96, -25]}, "ncc": {"g": [49, -6], "r": [96, -25]}}, "stream_and_mountains": {"euclidean": {"g": [33, 51], "r": [85, 101]}, "ncc": {"g": [32, 50], "r": [85, 101]}}, "three_generations": {"euclidean": {"g": [53, 14], "r": [112, 11]}, "ncc": {"g": [53, 14], "r": [112, 11]}}, "tobolsk": {"euclidean": {"g": [3, 3], "r": [6, 3]}, "ncc": {"g": [3, 3], "r": [6, 3]}}, "wharf": {"euclidean": {"g": [15, -7], "r": [83, -16]}, "ncc": {"g": [15, -7], "r": [83, -16]}}};</script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollSmoother.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

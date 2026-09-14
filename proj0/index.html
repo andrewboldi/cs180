@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project 0 — Becoming Friends with My Camera</title>
+  <meta name="description" content="CS180 Project 0 — perspective, focal length, and the dolly zoom.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%239C7A46' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5.5' fill='none' stroke='%239C7A46' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='16' r='1.8' fill='%239C7A46'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Jost:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    document.documentElement.classList.add('js');
+    /* static print/PDF mode: /?pdf=1 */
+    if (/[?&]pdf/.test(location.search)) {
+      document.documentElement.classList.add('no-anim', 'print-mode');
+    }
+    /* If the animation libraries never arrive, show the page anyway. */
+    window.__animBooted = false;
+    setTimeout(function () {
+      if (!window.__animBooted) document.documentElement.classList.add('no-anim');
+    }, 4000);
+  </script>
+</head>
+<body>
+
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div id="loader" aria-hidden="true">
+    <svg class="iris" width="100%" height="100%">
+      <defs>
+        <mask id="iris-mask">
+          <rect width="100%" height="100%" fill="#fff"></rect>
+          <circle class="iris-hole" cx="50%" cy="50%" r="0" fill="#000"></circle>
+        </mask>
+      </defs>
+      <rect width="100%" height="100%" fill="#262015" mask="url(#iris-mask)"></rect>
+    </svg>
+    <div class="loader-mark">
+      <svg viewBox="0 0 64 64" class="loader-ring" aria-hidden="true">
+        <circle cx="32" cy="32" r="28" fill="none" stroke="#B08D57" stroke-width="1.5" pathLength="100"></circle>
+        <circle cx="32" cy="32" r="12" fill="none" stroke="#B08D57" stroke-width="1" pathLength="100"></circle>
+      </svg>
+      <p>CS180 · PROJECT 0</p>
+    </div>
+  </div>
+
+  <header class="nav" id="nav">
+    <a class="nav-name" href="#top">Andrew&nbsp;Boldi</a>
+    <div class="nav-right">
+      <nav class="nav-links" aria-label="Sections">
+        <a class="nav-home" href="../">Index</a>
+        <a href="#part-1">01<span class="nav-label"> · Selfie</span></a>
+        <a href="#part-2">02<span class="nav-label"> · Compression</span></a>
+        <a href="#part-3">03<span class="nav-label"> · Dolly&nbsp;Zoom</span></a>
+      </nav>
+      <button class="nav-vf" id="vf-toggle" aria-pressed="false" title="Viewfinder — press V">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="9"></circle>
+          <circle cx="12" cy="12" r="3.6"></circle>
+          <path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21"></path>
+        </svg>
+        <span class="sr-only">Toggle viewfinder overlay</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="shutter-blink" id="shutter-blink" aria-hidden="true"></div>
+
+  <div class="hud" id="hud" hidden aria-hidden="true">
+    <i class="hud-corner c-tl"></i><i class="hud-corner c-tr"></i><i class="hud-corner c-bl"></i><i class="hud-corner c-br"></i>
+    <div class="hud-grid"></div>
+    <svg class="hud-reticle" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="1">
+      <circle cx="40" cy="40" r="26"></circle>
+      <line x1="40" y1="6" x2="40" y2="20"></line><line x1="40" y1="60" x2="40" y2="74"></line>
+      <line x1="6" y1="40" x2="20" y2="40"></line><line x1="60" y1="40" x2="74" y2="40"></line>
+    </svg>
+    <div class="hud-rec"><i></i><span>REC</span><span id="hud-frames">FR&nbsp;00</span></div>
+    <div class="hud-histo"><canvas id="hud-histo-canvas" width="128" height="42"></canvas><p>LUMA&nbsp;HIST · FIG.2B</p></div>
+    <div class="hud-kernel">
+      <p>SHARPEN&nbsp;3×3</p>
+      <div><span>0</span><span>−1</span><span>0</span><span>−1</span><span>5</span><span>−1</span><span>0</span><span>−1</span><span>0</span></div>
+    </div>
+    <div class="hud-exif"><span id="hud-f">f/1.8</span><span id="hud-shutter">1/250&nbsp;s</span><span id="hud-focal">26&nbsp;mm</span></div>
+    <div class="hud-af" id="hud-af"></div>
+  </div>
+
+  <div class="film-chip" id="film-chip" hidden aria-hidden="true">FR&nbsp;00</div>
+
+  <div id="smooth-wrapper">
+    <div id="smooth-content">
+      <main id="top">
+
+        <p class="print-url" aria-hidden="true">https://andrewboldi.github.io/cs180-project0/</p>
+
+        <section class="hero">
+          <p class="eyebrow hero-eyebrow">CS180 · Intro to Computer Vision &amp; Computational Photography · Fall 2026</p>
+          <h1 class="hero-title">
+            <span class="line-mask" data-speed="1.05"><span class="line">Becoming friends</span></span>
+            <span class="line-mask" data-speed="0.96"><span class="line">with <em class="accent">my camera</em></span></span>
+          </h1>
+          <p class="hero-sub" data-speed="0.985">Three small experiments in perspective — how focal length and where you stand reshape a photograph before you ever press the shutter.</p>
+          <div class="exif-strip" aria-hidden="true">
+            <span id="exif-f">f/1.8</span><span id="exif-shutter">1/250&nbsp;s</span><span id="exif-iso">ISO&nbsp;200</span><span id="exif-focal">26&nbsp;mm</span><span>Berkeley,&nbsp;CA</span>
+          </div>
+          <div class="scroll-cue"><span>Scroll</span><i></i></div>
+        </section>
+
+        <section class="part" id="part-1">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 01 · Portrait distance</p>
+            <h2 class="reveal">The selfie, three ways</h2>
+            <p class="lede reveal">Three portraits, one face, one framing. The first is shot from arm's length. For the second I stepped back several feet and zoomed in until the face filled the frame again — and for the third, way back, at full zoom.</p>
+          </header>
+          <div class="pair trio">
+            <figure class="frame ratio-p" data-speed="1.04">
+              <div class="frame-mask"><img src="media/part1-close.jpg" alt="Selfie taken at arm's length with the wide lens — facial features exaggerated"></div>
+              <figcaption data-lag="0.18">Fig. 1a — arm's length, no zoom</figcaption>
+            </figure>
+            <figure class="frame ratio-p" data-speed="0.99">
+              <div class="frame-mask"><img src="media/part1-zoom.jpg" alt="Portrait taken from several feet back with the lens zoomed in — proportions flattened"></div>
+              <figcaption data-lag="0.18">Fig. 1b — stepped back, zoomed in</figcaption>
+            </figure>
+            <figure class="frame ratio-p" data-speed="0.94">
+              <div class="frame-mask"><img src="media/part1-superzoom.jpg" alt="Portrait from much farther away at full zoom — features flattened further, background pulled close"></div>
+              <figcaption data-lag="0.18">Fig. 1c — way back, full zoom</figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>Up close, the camera exaggerates whatever sits nearest to it — usually the nose. At arm's length my nose is a lot closer to the lens than my ears are, so it projects disproportionately large and the whole face bulges forward. Stepping back evens out those relative distances — nose and ears become almost equidistant from the camera — and zooming in simply restores the framing. The glass never changed the geometry; the distance did. What reads as a "flattering lens" is really a flattering camera position. Pushing even further back (fig. 1c) continues the trend — the features flatten almost completely, and the background seems to press right up behind me.</p>
+          </div>
+        </section>
+
+        <section class="part" id="part-2">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 02 · Perspective compression</p>
+            <h2 class="reveal">The long lens flattens</h2>
+            <p class="lede reveal">One building with a receding façade, photographed twice: from far away with the lens zoomed in, then from up close with no zoom — walking forward until the building takes up the same room in the frame.</p>
+          </header>
+          <div class="pair pair-landscape">
+            <figure class="frame ratio-l" data-speed="0.96">
+              <div class="frame-mask"><img src="media/part2-zoom.jpg" alt="Classical campus building photographed from far away with the lens zoomed in — the columned facade looks flattened"></div>
+              <figcaption data-lag="0.18">Fig. 2a — far away + zoomed in</figcaption>
+            </figure>
+            <figure class="frame ratio-l" data-speed="1.04">
+              <div class="frame-mask"><img src="media/part2-wide.jpg" alt="The same columned facade photographed from up close with no zoom — strong receding perspective"></div>
+              <figcaption data-lag="0.18">Fig. 2b — walked closer, no zoom</figcaption>
+            </figure>
+          </div>
+          <div class="detect-row reveal">
+            <button class="detect-btn" id="detect-btn" aria-pressed="false"><span aria-hidden="true">⌖&nbsp;</span>Run corner detection</button>
+            <span class="detect-note" id="detect-note" aria-live="polite"></span>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>In the telephoto view the façade looks flattened — planes that sit meters apart stack almost onto one another. From far away, the near and far ends of the building are nearly the same distance from the camera in relative terms, so they project at nearly the same scale and the depth between them collapses. Up close the ratio flips: the nearest column is a few meters off while the farthest is many times that, so scale falls away steeply and the perspective lines dive toward their vanishing point. Same building, same framing — the only thing that moved was me.</p>
+          </div>
+        </section>
+
+        <section class="part part-solo" id="part-3">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 03 · The vertigo effect</p>
+            <h2 class="reveal">The dolly zoom</h2>
+            <p class="lede reveal">Hitchcock's trick. Dolly the camera backward while zooming in, holding the subject at a constant size — the subject stays still while the world stretches away behind them.</p>
+          </header>
+          <ol class="protocol">
+            <li><span>01</span>Pick a scene with real depth behind the subject</li>
+            <li><span>02</span>Step backward as you zoom in</li>
+            <li><span>03</span>Keep the subject the same size in every frame</li>
+            <li><span>04</span>Stitch the stills into a looping GIF</li>
+          </ol>
+          <figure class="frame frame-wide ratio-p" data-speed="0.975">
+            <div class="frame-mask"><img class="no-fx" src="media/part3-dollyzoom.gif" alt="Looping dolly zoom of a fountain pen — the pen holds its size while the room stretches behind it"></div>
+            <figcaption data-lag="0.18">Fig. 3 — dolly out, zoom in · looped GIF</figcaption>
+          </figure>
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>The subject is a fountain pen standing on a desk. I shot 26 stills, zooming out and then back in while moving the camera to hold the pen at a constant size, and stitched them into a GIF — since the sequence ends where it began, it loops seamlessly. The pen barely flinches, but the room behind it breathes: the background swells and compresses as the effective focal length changes. The surprise was how robust the illusion is — even a handheld, imperfect pull reads as vertigo once the subject's size is pinned.</p>
+          </div>
+        </section>
+
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <span>perspective · focal length · aperture · dolly zoom · parallax · compression&nbsp;·&nbsp;</span>
+            <span>perspective · focal length · aperture · dolly zoom · parallax · compression&nbsp;·&nbsp;</span>
+          </div>
+        </div>
+
+        <footer class="colophon">
+          <p class="colophon-title reveal">Graphing beautiful photons.</p>
+          <div class="colophon-meta reveal">
+            <p>Andrew Boldi — CS180: Intro to Computer Vision &amp; Computational Photography<br>UC Berkeley · Fall 2026</p>
+            <p class="colophon-links">
+              <a href="https://cal-cs180.github.io/fa26/hw/proj0/index.html">Assignment ↗</a>
+              <span aria-hidden="true">·</span>
+              <a href="https://cal-cs180.github.io/fa26/">Course ↗</a>
+            </p>
+            <p class="colophon-fine">Built with Three.js + GSAP · press V for the viewfinder · click a photo · type 180 for vertigo</p>
+          </div>
+        </footer>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollSmoother.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
