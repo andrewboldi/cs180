@@ -79,27 +79,49 @@ try {
   const rig = new THREE.Group();
   scene.add(rig);
 
-  const PLATE_W = 1.18;
-  const PLATE_H = 1.52;
+  /* each plate carries one grayscale channel of the cathedral, tinted —
+     only when the three register does the photograph appear */
+  const PLATE_W = 1.42;
+  const PLATE_H = 1.24;
+  const texLoader = new THREE.TextureLoader();
   const plateSpecs = [
-    { color: 0x46628a, z: 0.16 },   /* blue */
-    { color: 0x5f7a4a, z: 0 },      /* green */
-    { color: 0x8a4a42, z: -0.16 },  /* red */
+    { tint: 0x3d55f2, z: 0.16, tex: 'media/plate_ch_b.jpg' },
+    { tint: 0x3bd23b, z: 0, tex: 'media/plate_ch_g.jpg' },
+    { tint: 0xf23520, z: -0.16, tex: 'media/plate_ch_r.jpg' },
   ];
   const plates = [];
   const plateMats = [];
 
+  /* the projection screen: a dark pane the three records sum onto,
+     like Prokudin-Gorskii's triple projector */
+  const backing = new THREE.Mesh(
+    new THREE.PlaneGeometry(PLATE_W * 1.34, PLATE_H * 1.34),
+    new THREE.MeshBasicMaterial({ color: 0x1d1810, transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  backing.position.z = -0.26;
+  rig.add(backing);
+  const backingEdges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(PLATE_W * 1.34, PLATE_H * 1.34, 0.02)),
+    new THREE.LineBasicMaterial({ color: 0xb08d57, transparent: true, opacity: 0.6 }),
+  );
+  backingEdges.position.z = -0.26;
+  rig.add(backingEdges);
+  plateMats.push(backing.material, backingEdges.material);
+
   plateSpecs.forEach((spec, i) => {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: spec.color, metalness: 0.1, roughness: 0.25,
-      transparent: true, opacity: 0.42, envMapIntensity: 1.2,
+    const tex = texLoader.load(spec.tex);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, color: spec.tint,
+      transparent: true, opacity: 0.78,
+      blending: THREE.AdditiveBlending, fog: false,
       side: THREE.DoubleSide, depthWrite: false,
     });
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(PLATE_W, PLATE_H, 0.025), mat);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(PLATE_W, PLATE_H), mat);
     g.add(glass);
     const edgeMat = new THREE.LineBasicMaterial({ color: 0xb08d57, transparent: true, opacity: 0.85 });
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), edgeMat);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(PLATE_W, PLATE_H, 0.02)), edgeMat);
     g.add(edges);
     g.position.z = spec.z;
     g.userData.home = { x: 0, y: 0, z: spec.z };
@@ -227,7 +249,7 @@ try {
 
     /* plates breathe in and out of register */
     const breathe = reducedMotion ? 0 : (0.5 + 0.5 * Math.sin(t * 0.24));
-    const d = drift.v * (0.25 + 0.75 * breathe);
+    const d = drift.v * (0.12 + 0.88 * breathe);
     plates.forEach((p, i) => {
       const ph = p.userData.phase;
       p.position.x = p.userData.home.x + d * 0.16 * Math.sin(t * 0.4 + ph);
@@ -487,5 +509,152 @@ if (reducedMotion) {
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     keyBuffer = (keyBuffer + e.key.toLowerCase()).slice(-3);
     if (keyBuffer === 'rgb') shuffle();
+  });
+})();
+
+/* ————————————————— zoom lightbox + TeX equations ————————————————— */
+
+(() => {
+  const anim = !reducedMotion;
+
+  /* KaTeX display equations (fallback text stays if KaTeX never arrives) */
+  const renderTex = () => {
+    if (!window.katex) return false;
+    document.querySelectorAll('[data-tex]').forEach((el) => {
+      try {
+        katex.render(el.dataset.tex, el, { throwOnError: false, displayMode: true });
+      } catch (e) { /* keep fallback text */ }
+    });
+    return true;
+  };
+  if (!renderTex()) window.addEventListener('load', renderTex);
+
+  /* lightbox */
+  const lb = document.getElementById('lightbox');
+  if (!lb) return;
+  const stage = document.getElementById('lb-stage');
+  const img = document.getElementById('lb-img');
+  const titleEl = document.getElementById('lb-title');
+  const offEl = document.getElementById('lb-off');
+  const toggle = document.getElementById('lb-toggle');
+  const resetBtn = document.getElementById('lb-zoom-reset');
+
+  let view = { s: 1, x: 0, y: 0 };
+  let sources = { before: null, after: null, mode: 'after' };
+  let opener = null;
+  let dragging = null;
+
+  const apply = () => {
+    img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+    resetBtn.textContent = `${Math.round(view.s * 100)}%`;
+  };
+  const reset = () => { view = { s: 1, x: 0, y: 0 }; apply(); };
+
+  const zoomAt = (factor, cx, cy) => {
+    const ns = Math.min(9, Math.max(0.4, view.s * factor));
+    const k = ns / view.s;
+    const r = stage.getBoundingClientRect();
+    const px = cx - (r.left + r.width / 2);
+    const py = cy - (r.top + r.height / 2);
+    view.x = px - (px - view.x) * k;
+    view.y = py - (py - view.y) * k;
+    view.s = ns;
+    apply();
+  };
+  const zoomCenter = (factor) => {
+    const r = stage.getBoundingClientRect();
+    zoomAt(factor, r.left + r.width / 2, r.top + r.height / 2);
+  };
+
+  const setMode = (m) => {
+    sources.mode = m;
+    img.src = m === 'before' && sources.before ? sources.before : sources.after;
+    toggle.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.view === m));
+  };
+
+  const open = (frame) => {
+    const src = frame.querySelector('img');
+    if (!src) return;
+    opener = frame;
+    sources = { before: frame.dataset.before || null, after: src.currentSrc || src.src, mode: 'after' };
+    const cap = frame.querySelector('figcaption');
+    titleEl.textContent = cap ? (cap.childNodes[0].textContent || '').trim() : '';
+    const off = cap && cap.querySelector('.off');
+    offEl.textContent = off
+      ? off.innerHTML.replace(/<br\s*\/?>/gi, ' · ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+      : '';
+    toggle.hidden = !sources.before;
+    setMode('after');
+    reset();
+    lb.hidden = false;
+    if (window.ScrollSmoother && ScrollSmoother.get()) ScrollSmoother.get().paused(true);
+    if (anim && window.gsap) {
+      gsap.fromTo(lb, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' });
+    }
+  };
+
+  const close = () => {
+    const done = () => { lb.hidden = true; img.src = ''; };
+    if (anim && window.gsap) {
+      gsap.to(lb, {
+        opacity: 0, duration: 0.28, ease: 'power1.out',
+        onComplete: () => { gsap.set(lb, { opacity: 1 }); done(); },
+      });
+    } else {
+      done();
+    }
+    if (window.ScrollSmoother && ScrollSmoother.get()) ScrollSmoother.get().paused(false);
+    if (opener) { opener.focus(); opener = null; }
+  };
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomAt(Math.exp(-e.deltaY * 0.0016), e.clientX, e.clientY);
+  }, { passive: false });
+
+  stage.addEventListener('pointerdown', (e) => {
+    dragging = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: 0, tgt: e.target };
+    img.classList.add('dragging');
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragging.px;
+    const dy = e.clientY - dragging.py;
+    dragging.moved = Math.max(dragging.moved, Math.abs(dx) + Math.abs(dy));
+    view.x = dragging.vx + dx;
+    view.y = dragging.vy + dy;
+    apply();
+  });
+  const endDrag = (e) => {
+    if (dragging && e.type === 'pointerup' && dragging.moved < 5 && dragging.tgt === stage) close();
+    dragging = null;
+    img.classList.remove('dragging');
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  stage.addEventListener('dblclick', (e) => zoomAt(view.s < 2 ? 2.4 / view.s : 1 / view.s, e.clientX, e.clientY));
+
+  document.getElementById('lb-zoom-in').addEventListener('click', () => zoomCenter(1.4));
+  document.getElementById('lb-zoom-out').addEventListener('click', () => zoomCenter(1 / 1.4));
+  resetBtn.addEventListener('click', reset);
+  document.getElementById('lb-close').addEventListener('click', close);
+  toggle.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.view)));
+
+  window.addEventListener('keydown', (e) => {
+    if (lb.hidden) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === '+' || e.key === '=') zoomCenter(1.4);
+    else if (e.key === '-') zoomCenter(1 / 1.4);
+  });
+
+  /* every framed image opens the viewer */
+  document.querySelectorAll('.frame').forEach((frame) => {
+    frame.setAttribute('tabindex', '0');
+    frame.setAttribute('role', 'button');
+    frame.addEventListener('click', () => open(frame));
+    frame.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(frame); }
+    });
   });
 })();

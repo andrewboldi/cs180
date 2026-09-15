@@ -1048,3 +1048,148 @@ html:not(.js) #loader { display: none; }
 }
 
 .mono-inline { font-family: var(--mono); font-size: 0.85em; }
+
+/* clicking opens the zoom viewer — cursor says so (no crosshair here) */
+.frame { cursor: zoom-in; }
+
+/* —— pyramid flow figure ————————— */
+
+.pyr-flow {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(0.7rem, 2.4vw, 2rem);
+  margin: 2.6rem 0 0.8rem;
+  flex-wrap: nowrap;
+}
+
+.pyr-step { text-align: center; }
+
+.pyr-img {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(124, 94, 49, 0.4);
+  box-shadow: 0 14px 30px -14px rgba(39, 33, 23, 0.4);
+  margin-inline: auto;
+}
+
+.pyr-img img { display: block; width: 100%; height: auto; }
+
+.pyr-img.s1 { width: clamp(54px, 13vw, 92px); }
+.pyr-img.s1 img { filter: blur(0.7px); }
+.pyr-img.s2 { width: clamp(88px, 21vw, 150px); }
+.pyr-img.s3 { width: clamp(140px, 33vw, 236px); }
+
+.pyr-step p {
+  margin: 0.7rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brass-deep);
+  line-height: 1.7;
+}
+
+.pyr-arrow {
+  font-family: var(--mono);
+  color: var(--brass);
+  padding-bottom: 3.2rem;
+  font-size: 1rem;
+}
+
+/* —— KaTeX formula cards ————————— */
+
+.formula .math { white-space: normal; overflow-x: auto; }
+.formula .katex { font-size: 1.05em; }
+.formula .katex-display { margin: 0.4em 0; }
+
+/* —— lightbox zoom viewer ———————— */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.lb-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 20, 13, 0.93);
+}
+
+.lb-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem var(--gutter);
+  font-family: var(--mono);
+  color: #E4DBC8;
+  background: linear-gradient(rgba(24, 20, 13, 0.85), transparent);
+  flex-wrap: wrap;
+}
+
+.lb-title { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; }
+.lb-off { font-size: 0.62rem; letter-spacing: 0.14em; color: #B08D57; }
+
+.lb-toggle { display: flex; gap: 2px; margin-left: auto; }
+
+.lb-toggle button, .lb-zoom button, .lb-close {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #E4DBC8;
+  background: rgba(228, 219, 200, 0.1);
+  border: 1px solid rgba(228, 219, 200, 0.3);
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.lb-toggle button:first-child { border-radius: 999px 0 0 999px; }
+.lb-toggle button:last-child { border-radius: 0 999px 999px 0; }
+.lb-toggle button.on { background: #B08D57; color: #241E14; border-color: #B08D57; }
+
+.lb-zoom { display: flex; gap: 2px; }
+.lightbox .lb-toggle[hidden] { display: none; }
+.lb-toggle:not([hidden]) ~ .lb-zoom { margin-left: 0; }
+.lb-zoom { margin-left: auto; }
+.lb-toggle:not([hidden]) + .lb-zoom { margin-left: 0; }
+
+.lb-zoom button:first-child { border-radius: 999px 0 0 999px; }
+.lb-zoom button:last-child { border-radius: 0 999px 999px 0; }
+.lb-zoom button:hover, .lb-toggle button:hover, .lb-close:hover { background: rgba(228, 219, 200, 0.25); }
+
+.lb-close { border-radius: 999px; }
+
+.lb-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.lb-stage img {
+  max-width: 94%;
+  max-height: 88%;
+  margin-top: 3%;
+  will-change: transform;
+  cursor: grab;
+  border-radius: 6px;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.8);
+  user-select: none;
+}
+
+.lb-stage img.dragging { cursor: grabbing; }
+
+@media (max-width: 700px) {
+  .lb-bar { gap: 0.5rem; }
+  .lb-off { display: none; }
+}

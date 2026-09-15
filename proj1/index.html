@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Jost:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <link rel="stylesheet" href="styles.css">
   <script>
     document.documentElement.classList.add('js');
@@ -109,12 +111,12 @@
           <div class="formulas reveal">
             <div class="formula">
               <h3>L2 / Euclidean distance</h3>
-              <span class="math">d(A,B) = √ Σᵢⱼ ( Aᵢⱼ − Bᵢⱼ )²</span>
+              <span class="math" data-tex="d(A,B) \,=\, \sqrt{\sum_{i,j} \bigl( A_{ij} - B_{ij} \bigr)^{2}}">d(A,B) = √ Σᵢⱼ ( Aᵢⱼ − Bᵢⱼ )²</span>
               <p>Sum of squared pixel differences — lower is better. Fast and simple, but it assumes the two channels have similar brightness, which glass plates shot through different filters often do not.</p>
             </div>
             <div class="formula">
               <h3>Normalized cross-correlation</h3>
-              <span class="math">ncc(A,B) = ⟨ (A−Ā)∕‖A−Ā‖ , (B−B̄)∕‖B−B̄‖ ⟩</span>
+              <span class="math" data-tex="\operatorname{ncc}(A,B) \,=\, \left\langle \frac{A-\bar{A}}{\lVert A-\bar{A} \rVert},\; \frac{B-\bar{B}}{\lVert B-\bar{B} \rVert} \right\rangle">ncc(A,B) = ⟨ (A−Ā)∕‖A−Ā‖ , (B−B̄)∕‖B−B̄‖ ⟩</span>
               <p>The dot product of both channels after subtracting their means and normalizing — a cosine similarity, higher is better. Invariant to affine brightness changes between plates.</p>
             </div>
           </div>
@@ -133,15 +135,15 @@
           </div>
 
           <div class="result-grid" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
-            <figure class="frame">
+            <figure class="frame" data-before="media/cathedral_naive.jpg">
               <div class="frame-mask"><img src="media/cathedral_ncc.jpg" alt="Cathedral colorized after single-scale alignment"></div>
               <figcaption>Cathedral<span class="off">G (+2, +5) · R (+3, +12) · both metrics</span></figcaption>
             </figure>
-            <figure class="frame">
+            <figure class="frame" data-before="media/monastery_naive.jpg">
               <div class="frame-mask"><img src="media/monastery_ncc.jpg" alt="Monastery colorized after single-scale alignment"></div>
               <figcaption>Monastery<span class="off">G (+2, -3) · R (+2, +3) · both metrics</span></figcaption>
             </figure>
-            <figure class="frame">
+            <figure class="frame" data-before="media/tobolsk_naive.jpg">
               <div class="frame-mask"><img src="media/tobolsk_ncc.jpg" alt="Tobolsk colorized after single-scale alignment"></div>
               <figcaption>Tobolsk<span class="off">G (+3, +3) · R (+3, +6) · both metrics</span></figcaption>
             </figure>
@@ -159,23 +161,13 @@
             <p class="lede reveal">The full scans are ~3700 × 3200 pixels with displacements beyond a hundred pixels — exhaustive search at that size would evaluate thousands of 12-megapixel differences. The pyramid finds the big moves where pixels are cheap.</p>
           </header>
 
-          <div class="pyramid-diagram reveal" aria-hidden="true">
-            <svg viewBox="0 0 640 190">
-              <rect x="10" y="30" width="150" height="100" rx="6" fill="none" stroke="#7C5E31" stroke-width="1.5" opacity="0.9"/>
-              <rect x="220" y="15" width="190" height="130" rx="6" fill="none" stroke="#7C5E31" stroke-width="1.2" opacity="0.65"/>
-              <rect x="470" y="0" width="160" height="160" rx="6" fill="none" stroke="#7C5E31" stroke-width="1" opacity="0.45"/>
-              <text x="18" y="150" class="lbl">coarsest scale · search ±50</text>
-              <text x="228" y="163" class="lbl">×2 offset · refine ±5</text>
-              <text x="478" y="178" class="lbl">full res · refine ±5</text>
-              <path d="M168 80 h40" stroke="#9C7A46" stroke-width="1.2" marker-end="url(#arr)"/>
-              <path d="M418 80 h40" stroke="#9C7A46" stroke-width="1.2" marker-end="url(#arr)"/>
-              <defs>
-                <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0 0 L10 5 L0 10 z" fill="#9C7A46"/>
-                </marker>
-              </defs>
-            </svg>
-          </div>
+          <figure class="pyr-flow reveal" aria-hidden="true">
+            <div class="pyr-step"><div class="pyr-img s1"><img src="media/cathedral_ncc.jpg" alt=""></div><p>coarsest scale<br>search ±50</p></div>
+            <span class="pyr-arrow">→</span>
+            <div class="pyr-step"><div class="pyr-img s2"><img src="media/cathedral_ncc.jpg" alt=""></div><p>double the offset<br>refine ±5</p></div>
+            <span class="pyr-arrow">→</span>
+            <div class="pyr-step"><div class="pyr-img s3"><img src="media/cathedral_ncc.jpg" alt=""></div><p>full resolution<br>refine ±5</p></div>
+          </figure>
 
           <div class="notes reveal">
             <p class="notes-label">How it works</p>
@@ -183,16 +175,16 @@
           </div>
 
           <div class="result-grid" style="margin-top: clamp(3rem, 7vh, 5rem);">
-            <figure class="frame"><div class="frame-mask"><img src="media/church_ncc.jpg" alt="Church, pyramid-aligned"></div><figcaption>Church<span class="off">L2 · G (+4, +25) · R (-4, +58)<br>NCC · G (+4, +25) · R (-4, +58)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/harvesters_ncc.jpg" alt="Harvesters, pyramid-aligned"></div><figcaption>Harvesters<span class="off">L2 · G (+16, +59) · R (+13, +124)<br>NCC · G (+17, +60) · R (+14, +124)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/icon_ncc.jpg" alt="Icon, pyramid-aligned"></div><figcaption>Icon<span class="off">L2 · G (+17, +41) · R (+23, +90)<br>NCC · G (+17, +41) · R (+23, +89)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/ilemselga_ncc.jpg" alt="Ilemselga, pyramid-aligned"></div><figcaption>Ilemselga<span class="off">L2 · G (+7, +39) · R (+11, +130)<br>NCC · G (+7, +40) · R (+11, +130)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/melons_ncc.jpg" alt="Melons, pyramid-aligned"></div><figcaption>Melons<span class="off">L2 · G (+11, +82) · R (+13, +178)<br>NCC · G (+11, +82) · R (+13, +178)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/religous_painting_ncc.jpg" alt="Religious painting, pyramid-aligned"></div><figcaption>Religious painting<span class="off">L2 · G (+3, +28) · R (+7, +68)<br>NCC · G (+3, +28) · R (+7, +68)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/self_portrait_ncc.jpg" alt="Self portrait, pyramid-aligned"></div><figcaption>Self portrait<span class="off">L2 · G (+29, +79) · R (+36, +176)<br>NCC · G (+29, +79) · R (+36, +176)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/siren_ncc.jpg" alt="Siren, pyramid-aligned"></div><figcaption>Siren<span class="off">L2 · G (-6, +49) · R (-25, +96)<br>NCC · G (-6, +49) · R (-25, +96)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/three_generations_ncc.jpg" alt="Three generations, pyramid-aligned"></div><figcaption>Three generations<span class="off">L2 · G (+14, +53) · R (+11, +112)<br>NCC · G (+14, +53) · R (+11, +112)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/wharf_ncc.jpg" alt="Wharf, pyramid-aligned"></div><figcaption>Wharf<span class="off">L2 · G (-7, +15) · R (-16, +83)<br>NCC · G (-7, +15) · R (-16, +83)</span></figcaption></figure>
+            <figure class="frame" data-before="media/church_naive.jpg"><div class="frame-mask"><img src="media/church_ncc.jpg" alt="Church, pyramid-aligned"></div><figcaption>Church<span class="off">L2 · G (+4, +25) · R (-4, +58)<br>NCC · G (+4, +25) · R (-4, +58)</span></figcaption></figure>
+            <figure class="frame" data-before="media/harvesters_naive.jpg"><div class="frame-mask"><img src="media/harvesters_ncc.jpg" alt="Harvesters, pyramid-aligned"></div><figcaption>Harvesters<span class="off">L2 · G (+16, +59) · R (+13, +124)<br>NCC · G (+17, +60) · R (+14, +124)</span></figcaption></figure>
+            <figure class="frame" data-before="media/icon_naive.jpg"><div class="frame-mask"><img src="media/icon_ncc.jpg" alt="Icon, pyramid-aligned"></div><figcaption>Icon<span class="off">L2 · G (+17, +41) · R (+23, +90)<br>NCC · G (+17, +41) · R (+23, +89)</span></figcaption></figure>
+            <figure class="frame" data-before="media/ilemselga_naive.jpg"><div class="frame-mask"><img src="media/ilemselga_ncc.jpg" alt="Ilemselga, pyramid-aligned"></div><figcaption>Ilemselga<span class="off">L2 · G (+7, +39) · R (+11, +130)<br>NCC · G (+7, +40) · R (+11, +130)</span></figcaption></figure>
+            <figure class="frame" data-before="media/melons_naive.jpg"><div class="frame-mask"><img src="media/melons_ncc.jpg" alt="Melons, pyramid-aligned"></div><figcaption>Melons<span class="off">L2 · G (+11, +82) · R (+13, +178)<br>NCC · G (+11, +82) · R (+13, +178)</span></figcaption></figure>
+            <figure class="frame" data-before="media/religous_painting_naive.jpg"><div class="frame-mask"><img src="media/religous_painting_ncc.jpg" alt="Religious painting, pyramid-aligned"></div><figcaption>Religious painting<span class="off">L2 · G (+3, +28) · R (+7, +68)<br>NCC · G (+3, +28) · R (+7, +68)</span></figcaption></figure>
+            <figure class="frame" data-before="media/self_portrait_naive.jpg"><div class="frame-mask"><img src="media/self_portrait_ncc.jpg" alt="Self portrait, pyramid-aligned"></div><figcaption>Self portrait<span class="off">L2 · G (+29, +79) · R (+36, +176)<br>NCC · G (+29, +79) · R (+36, +176)</span></figcaption></figure>
+            <figure class="frame" data-before="media/siren_naive.jpg"><div class="frame-mask"><img src="media/siren_ncc.jpg" alt="Siren, pyramid-aligned"></div><figcaption>Siren<span class="off">L2 · G (-6, +49) · R (-25, +96)<br>NCC · G (-6, +49) · R (-25, +96)</span></figcaption></figure>
+            <figure class="frame" data-before="media/three_generations_naive.jpg"><div class="frame-mask"><img src="media/three_generations_ncc.jpg" alt="Three generations, pyramid-aligned"></div><figcaption>Three generations<span class="off">L2 · G (+14, +53) · R (+11, +112)<br>NCC · G (+14, +53) · R (+11, +112)</span></figcaption></figure>
+            <figure class="frame" data-before="media/wharf_naive.jpg"><div class="frame-mask"><img src="media/wharf_ncc.jpg" alt="Wharf, pyramid-aligned"></div><figcaption>Wharf<span class="off">L2 · G (-7, +15) · R (-16, +83)<br>NCC · G (-7, +15) · R (-16, +83)</span></figcaption></figure>
           </div>
 
           <div class="notes reveal">
@@ -230,11 +222,11 @@
           </header>
 
           <div class="result-grid">
-            <figure class="frame"><div class="frame-mask"><img src="media/bridge_ncc.jpg" alt="Railway bridge, pyramid-aligned"></div><figcaption>Bridge<span class="off">L2 · G (-11, +67) · R (-28, +119)<br>NCC · G (-11, +67) · R (-28, +118)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/flowers_ncc.jpg" alt="Flowers, pyramid-aligned"></div><figcaption>Flowers<span class="off">L2 · G (+19, +24) · R (+40, +121)<br>NCC · G (+19, +25) · R (+40, +121)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/forest_ncc.jpg" alt="Forest, pyramid-aligned"></div><figcaption>Forest<span class="off">L2 · G (-32, +36) · R (+7, +97)<br>NCC · G (-32, +37) · R (+7, +97)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/roses_ncc.jpg" alt="Roses, pyramid-aligned"></div><figcaption>Roses<span class="off">L2 · G (+8, +8) · R (+13, +60)<br>NCC · G (+8, +8) · R (+13, +60)</span></figcaption></figure>
-            <figure class="frame"><div class="frame-mask"><img src="media/stream_and_mountains_ncc.jpg" alt="Stream and mountains, pyramid-aligned"></div><figcaption>Stream &amp; mountains<span class="off">L2 · G (+51, +33) · R (+101, +85)<br>NCC · G (+50, +32) · R (+101, +85)</span></figcaption></figure>
+            <figure class="frame" data-before="media/bridge_naive.jpg"><div class="frame-mask"><img src="media/bridge_ncc.jpg" alt="Railway bridge, pyramid-aligned"></div><figcaption>Bridge<span class="off">L2 · G (-11, +67) · R (-28, +119)<br>NCC · G (-11, +67) · R (-28, +118)</span></figcaption></figure>
+            <figure class="frame" data-before="media/flowers_naive.jpg"><div class="frame-mask"><img src="media/flowers_ncc.jpg" alt="Flowers, pyramid-aligned"></div><figcaption>Flowers<span class="off">L2 · G (+19, +24) · R (+40, +121)<br>NCC · G (+19, +25) · R (+40, +121)</span></figcaption></figure>
+            <figure class="frame" data-before="media/forest_naive.jpg"><div class="frame-mask"><img src="media/forest_ncc.jpg" alt="Forest, pyramid-aligned"></div><figcaption>Forest<span class="off">L2 · G (-32, +36) · R (+7, +97)<br>NCC · G (-32, +37) · R (+7, +97)</span></figcaption></figure>
+            <figure class="frame" data-before="media/roses_naive.jpg"><div class="frame-mask"><img src="media/roses_ncc.jpg" alt="Roses, pyramid-aligned"></div><figcaption>Roses<span class="off">L2 · G (+8, +8) · R (+13, +60)<br>NCC · G (+8, +8) · R (+13, +60)</span></figcaption></figure>
+            <figure class="frame" data-before="media/stream_and_mountains_naive.jpg"><div class="frame-mask"><img src="media/stream_and_mountains_ncc.jpg" alt="Stream and mountains, pyramid-aligned"></div><figcaption>Stream &amp; mountains<span class="off">L2 · G (+51, +33) · R (+101, +85)<br>NCC · G (+50, +32) · R (+101, +85)</span></figcaption></figure>
           </div>
         </section>
 
@@ -272,7 +264,7 @@
               </tbody>
             </table>
           </div>
-          <p class="convention reveal">emir rows flagged — see part 03 · offsets recovered from the saved outputs by phase correlation</p>
+          <p class="convention reveal">emir rows flagged — see part 03 · offsets as printed by the alignment run · click any image to zoom</p>
         </section>
 
         <div class="marquee" aria-hidden="true">
@@ -293,12 +285,31 @@
               <span aria-hidden="true">·</span>
               <a href="../">All projects ↗</a>
             </p>
-            <p class="colophon-fine">Built with Three.js + GSAP · type RGB to shuffle the plates · drag the sliders</p>
+            <p class="colophon-fine">Built with Three.js + GSAP · type RGB to shuffle the plates · drag the sliders · click any result to zoom</p>
           </div>
         </footer>
 
       </main>
     </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lb-backdrop" data-close></div>
+    <div class="lb-stage" id="lb-stage"><img id="lb-img" src="" alt="Enlarged view"></div>
+    <header class="lb-bar">
+      <span class="lb-title" id="lb-title"></span>
+      <span class="lb-off" id="lb-off"></span>
+      <div class="lb-toggle" id="lb-toggle" hidden>
+        <button type="button" data-view="before">Naive</button>
+        <button type="button" data-view="after" class="on">Aligned</button>
+      </div>
+      <div class="lb-zoom">
+        <button type="button" id="lb-zoom-out" aria-label="Zoom out">−</button>
+        <button type="button" id="lb-zoom-reset">100%</button>
+        <button type="button" id="lb-zoom-in" aria-label="Zoom in">+</button>
+      </div>
+      <button type="button" class="lb-close" id="lb-close" aria-label="Close">✕</button>
+    </header>
   </div>
 
   <script>window.OFFSETS = {"bridge": {"euclidean": {"g": [67, -11], "r": [119, -28]}, "ncc": {"g": [67, -11], "r": [118, -28]}}, "cathedral": {"euclidean": {"g": [5, 2], "r": [12, 3]}, "ncc": {"g": [5, 2], "r": [12, 3]}}, "church": {"euclidean": {"g": [25, 4], "r": [58, -4]}, "ncc": {"g": [25, 4], "r": [58, -4]}}, "emir": {"euclidean": {"g": [49, 24], "r": [103, 57]}, "ncc": {"g": [49, 24], "r": [104, 56]}}, "flowers": {"euclidean": {"g": [24, 19], "r": [121, 40]}, "ncc": {"g": [25, 19], "r": [121, 40]}}, "forest": {"euclidean": {"g": [36, -32], "r": [97, 7]}, "ncc": {"g": [37, -32], "r": [97, 7]}}, "harvesters": {"euclidean": {"g": [59, 16], "r": [124, 13]}, "ncc": {"g": [60, 17], "r": [124, 14]}}, "icon": {"euclidean": {"g": [41, 17], "r": [90, 23]}, "ncc": {"g": [41, 17], "r": [89, 23]}}, "ilemselga": {"euclidean": {"g": [39, 7], "r": [130, 11]}, "ncc": {"g": [40, 7], "r": [130, 11]}}, "melons": {"euclidean": {"g": [82, 11], "r": [178, 13]}, "ncc": {"g": [82, 11], "r": [178, 13]}}, "monastery": {"euclidean": {"g": [-3, 2], "r": [3, 2]}, "ncc": {"g": [-3, 2], "r": [3, 2]}}, "religous_painting": {"euclidean": {"g": [28, 3], "r": [68, 7]}, "ncc": {"g": [28, 3], "r": [68, 7]}}, "roses": {"euclidean": {"g": [8, 8], "r": [60, 13]}, "ncc": {"g": [8, 8], "r": [60, 13]}}, "self_portrait": {"euclidean": {"g": [79, 29], "r": [176, 36]}, "ncc": {"g": [79, 29], "r": [176, 36]}}, "siren": {"euclidean": {"g": [49, -6], "r": [96, -25]}, "ncc": {"g": [49, -6], "r": [96, -25]}}, "stream_and_mountains": {"euclidean": {"g": [33, 51], "r": [85, 101]}, "ncc": {"g": [32, 50], "r": [85, 101]}}, "three_generations": {"euclidean": {"g": [53, 14], "r": [112, 11]}, "ncc": {"g": [53, 14], "r": [112, 11]}}, "tobolsk": {"euclidean": {"g": [3, 3], "r": [6, 3]}, "ncc": {"g": [3, 3], "r": [6, 3]}}, "wharf": {"euclidean": {"g": [15, -7], "r": [83, -16]}, "ncc": {"g": [15, -7], "r": [83, -16]}}};</script>
