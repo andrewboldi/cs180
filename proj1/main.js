@@ -266,6 +266,9 @@ try {
       const ph = p.userData.phase;
       p.position.x = p.userData.home.x + d * 0.16 * Math.sin(t * 0.4 + ph);
       p.position.y = p.userData.home.y + d * 0.2 * Math.cos(t * 0.31 + ph * 1.4);
+      // collapse depth into registration: coplanar when aligned (so tilt
+      // can't parallax-separate them), layered when drifted apart
+      p.position.z = p.userData.home.z * Math.min(1, d);
       p.rotation.z = d * 0.1 * Math.sin(t * 0.22 + ph);
       p.rotation.y = d * 0.12 * Math.sin(t * 0.18 + ph * 0.8);
     });
