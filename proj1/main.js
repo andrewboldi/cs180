@@ -218,8 +218,9 @@ try {
     };
   };
 
-  /* misregistration breathes: 0 = perfectly stacked, 1 = drifted apart */
-  const drift = { v: 1 };
+  /* misregistration cycle: 0 = perfectly stacked, 1 = drifted apart.
+     kick lets the RGB easter egg scatter even during the aligned hold */
+  const drift = { v: 1, kick: 0 };
 
   const clock = new THREE.Clock();
   let rafId = null;
@@ -247,10 +248,21 @@ try {
       pose.op += (tgt.op - pose.op) * 0.05;
     }
 
-    /* plates breathe in and out of register */
-    const breathe = reducedMotion ? 0 : (0.5 + 0.5 * Math.sin(t * 0.24));
-    const d = drift.v * (0.12 + 0.88 * breathe);
-    plates.forEach((p, i) => {
+    /* plates drift apart, then converge to exact registration and hold —
+       the photograph resolves — before drifting apart again */
+    let env;
+    if (reducedMotion) {
+      env = 0; // static: show the registered photograph
+    } else {
+      const CYCLE = 13.0;
+      const cp = (t % CYCLE) / CYCLE;
+      if (cp < 0.46) env = 1;                                    // drifting
+      else if (cp < 0.66) env = 1 - smooth01((cp - 0.46) / 0.20); // converging
+      else if (cp < 0.80) env = 0;                               // held, aligned
+      else env = smooth01((cp - 0.80) / 0.20);                   // drifting apart
+    }
+    const d = drift.v * Math.max(env, drift.kick);
+    plates.forEach((p) => {
       const ph = p.userData.phase;
       p.position.x = p.userData.home.x + d * 0.16 * Math.sin(t * 0.4 + ph);
       p.position.y = p.userData.home.y + d * 0.2 * Math.cos(t * 0.31 + ph * 1.4);
@@ -488,21 +500,18 @@ if (reducedMotion) {
     }, 3000);
   }
 
-  /* — type "rgb": the plates scatter and re-register — */
+  /* — type "rgb": force the plates to scatter, then re-register — */
   let busy = false;
   const shuffle = () => {
     if (busy || !anim || !sceneApi) return;
     busy = true;
     const tl = gsap.timeline({ onComplete: () => { busy = false; } });
-    tl.to(sceneApi.drift, { v: 5, duration: 0.7, ease: 'power2.out' })
-      .to(sceneApi.drift, { v: 1, duration: 1.6, ease: 'power3.inOut' }, '>+0.2');
-    sceneApi.plates.forEach((p, i) => {
-      tl.to(p.rotation, {
-        y: `+=${(i - 1) * 2.4 + 1.2}`,
-        duration: 2.4,
-        ease: 'power3.inOut',
-      }, 0);
-    });
+    /* kick overrides the registration cycle so it scatters even mid-hold,
+       then eases back to 0 so the normal converge/align loop resumes */
+    tl.set(sceneApi.drift, { kick: 1 })
+      .to(sceneApi.drift, { v: 4, duration: 0.6, ease: 'power2.out' }, 0)
+      .to(sceneApi.drift, { v: 1, duration: 1.7, ease: 'power3.inOut' }, '>+0.15')
+      .to(sceneApi.drift, { kick: 0, duration: 1.9, ease: 'power3.inOut' }, 0.6);
   };
   let keyBuffer = '';
   window.addEventListener('keydown', (e) => {
