@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project 2 — Fun with Filters and Frequencies</title>
+  <meta name="description" content="CS180 Project 2 — convolutions from scratch, finite differences and DoG edges, unsharp masking, hybrid images, Gaussian and Laplacian stacks, and multiresolution blending.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 26 C10 26 11.5 6 16 6 S22 26 30 26' fill='none' stroke='%237C5E31' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M2 29 H30' stroke='%239C7A46' stroke-width='1.4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Italiana&amp;family=Jost:wght@300;400;500&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    document.documentElement.classList.add('js');
+    if (/[?&]pdf/.test(location.search)) {
+      document.documentElement.classList.add('no-anim', 'print-mode');
+    }
+    window.__animBooted = false;
+    setTimeout(function () {
+      if (!window.__animBooted) document.documentElement.classList.add('no-anim');
+    }, 4000);
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div id="loader" aria-hidden="true">
+    <svg class="iris" width="100%" height="100%">
+    <defs>
+      <mask id="iris-mask">
+        <rect width="100%" height="100%" fill="#fff"></rect>
+        <circle class="iris-hole" cx="50%" cy="50%" r="0" fill="#000"></circle>
+      </mask>
+    </defs>
+    <rect width="100%" height="100%" fill="#262015" mask="url(#iris-mask)"></rect></svg>
+    <div class="loader-mark">
+      <svg viewbox="0 0 64 64" class="loader-ring" aria-hidden="true">
+      <circle cx="32" cy="32" r="28" fill="none" stroke="#B08D57" stroke-width="1.5" pathlength="100"></circle>
+      <circle cx="32" cy="32" r="12" fill="none" stroke="#B08D57" stroke-width="1" pathlength="100"></circle></svg>
+      <p>CS180 · PROJECT 2</p>
+    </div>
+  </div>
+  <header class="nav" id="nav">
+    <a class="nav-name" href="#top">Andrew&nbsp;Boldi</a>
+    <div class="nav-right">
+      <nav class="nav-links" aria-label="Sections">
+        <a class="nav-home" href="../">Index</a> <a href="#p11">1.1 <span class="nav-label">· Convolve</span></a> <a href="#p12">1.2 <span class="nav-label">· Edges</span></a> <a href="#p13">1.3 <span class="nav-label">· DoG</span></a> <a href="#p21">2.1 <span class="nav-label">· Sharpen</span></a> <a href="#p22">2.2 <span class="nav-label">· Hybrids</span></a> <a href="#p23">2.3 <span class="nav-label">· Stacks</span></a> <a href="#p24">2.4 <span class="nav-label">· Blend</span></a>
+      </nav>
+    </div>
+  </header>
+  <div id="smooth-wrapper">
+    <div id="smooth-content">
+      <main id="top">
+        <p class="print-url" aria-hidden="true">https://andrewboldi.github.io/cs180/proj2/</p>
+        <section class="hero">
+          <p class="eyebrow hero-eyebrow">CS180 · Intro to Computer Vision &amp; Computational Photography · Fall 2026</p>
+          <h1 class="hero-title"><span class="line-mask" data-speed="1.05"><span class="line">Fun with Filters</span></span> <span class="line-mask" data-speed="0.96"><span class="line">&amp; <em class="accent">Frequencies</em></span></span></h1>
+          <p class="hero-sub" data-speed="0.985">Convolutions written from scratch, edges from derivatives, and then a tour of frequencies: unsharp masking, hybrid images that change with distance, and multiresolution blending all the way to the Oraple.</p>
+          <p class="print-note">This page is interactive: before/after sliders, a zoom viewer on every image, and an animated Gaussian stack. The live version is at https://andrewboldi.github.io/cs180/proj2/</p>
+          <div class="exif-strip" aria-hidden="true">
+            <span>Proj&nbsp;02</span><span>Filters&nbsp;→&nbsp;frequencies</span><span><span class="nt">σ</span>&nbsp;2.85&nbsp;→&nbsp;182.4</span><span>8-level&nbsp;stacks</span><span>Berkeley,&nbsp;CA</span>
+          </div>
+          <div class="scroll-cue">
+            <span>Scroll</span>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 1.1 ——————————————————————— -->
+        <section class="part" id="p11">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 1.1 · Convolutions from scratch</p>
+            <h2 class="reveal">Four loops and a pad</h2>
+            <p class="lede reveal">Before touching any library, we write a 2D convolution ourselves using only numpy arrays and for loops. For every output pixel, we walk over its (2k + 1) × (2k + 1) neighborhood and add up the image times the kernel. Since the image is indexed as <span class="mono-inline">im[i − u][j − v]</span> while the kernel is indexed as <span class="mono-inline">[u + k][v + k]</span>, the filter gets flipped just like a true convolution should.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Discrete convolution</h3><span class="math" data-tex="(f * h)[i,j] \,=\, \sum_{u=-k}^{k} \sum_{v=-k}^{k} h[u,v]\; f[i-u,\, j-v]">(f ∗ h)[i,j] = Σᵤ Σᵥ h[u,v] f[i−u, j−v]</span>
+              <p>Every kernel here is the outer product of two 1D filters D<sub>x</sub> and D<sub>y</sub> times a prefactor. For example, the 3×3 box filter is three ones times three ones divided by 9, and the 9×9 box filter is nine ones times nine ones divided by 81.</p>
+            </div>
+            <div class="formula">
+              <h3>Runtime and boundaries</h3><span class="math" data-tex="\text{multiply-adds} \,=\, W \cdot H \cdot (2k+1)^{2}">multiply-adds = W · H · (2k+1)²</span>
+              <p>The runtime here is W × H × (2k + 1)², so the 9×9 box costs nine times as much as the 3×3 box. The boundaries are handled by zero padding the image by k pixels on every side with <span class="mono-inline">np.pad</span>, so the kernel never reads outside the array.</p>
+            </div>
+          </div>
+          <pre class="code reveal"><code><span class="c"># part1dot1 in main.py (progress bar and file writes left out)</span>
+CONVS = {
+  "box_filter3x3": {"Dx": [1] * 3, "Dy": [1] * 3, "k": 1, "prefactor": 1 / 9},
+  "box_filter9x9": {"Dx": [1] * 9, "Dy": [1] * 9, "k": 4, "prefactor": 1 / 81},
+  "finite_difference": {"Dx": [1, 0, -1], "Dy": [1, 0, -1], "k": 1, "prefactor": 1},
+}
+im = cv2.imread("assets/me.png", cv2.IMREAD_GRAYSCALE).astype(np.float32)
+w, h = im.shape
+
+<span class="k">for</span> conv_name, conv <span class="k">in</span> CONVS.items():
+  im_out = np.zeros_like(im)
+  Dx, Dy, k, prefactor = conv["Dx"], conv["Dy"], conv["k"], conv["prefactor"]
+  im = np.pad(im, k, mode="constant", constant_values=0)
+  <span class="k">for</span> i <span class="k">in</span> range(k, w + k):
+    <span class="k">for</span> j <span class="k">in</span> range(k, h + k):
+      <span class="k">for</span> u <span class="k">in</span> range(-k, k + 1, 1):
+        <span class="k">for</span> v <span class="k">in</span> range(-k, k + 1, 1):
+          im_out[i - k][j - k] += prefactor * im[i - u][j - v] * Dx[u + k] * Dy[v + k]
+
+  <span class="c"># scipy convolve 2d comparison</span>
+  im_out = scipy.signal.convolve2d(im, np.einsum("i,j-&gt;ij", Dx, Dy))</code></pre>
+          <div class="result-grid five" style="margin-top: clamp(3rem, 7vh, 4.5rem);">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_gray.jpg" width="1199" height="1600" loading="lazy" decoding="async" alt="My portrait read as grayscale, the input to every filter"></div>
+              <figcaption>Me<span class="off">grayscale input</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_box3.jpg" width="1199" height="1600" loading="lazy" decoding="async" alt="Portrait after the 3 by 3 box filter, four-loop version"></div>
+              <figcaption>Box 3×3<span class="off">four loops</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_box3_scipy.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 3 by 3 box filter with scipy.signal.convolve2d, mostly saturated to white"></div>
+              <figcaption>Box 3×3<span class="off">scipy convolve2d</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_box9.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter, four-loop version, posterized into a few gray levels"></div>
+              <figcaption>Box 9×9<span class="off">four loops</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_box9_scipy.jpg" width="1201" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter with scipy.signal.convolve2d, almost entirely white"></div>
+              <figcaption>Box 9×9<span class="off">scipy convolve2d</span></figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Comparing with scipy</p>
+            <p>We compare every result to <span class="mono-inline">scipy.signal.convolve2d</span>, run on the same zero padded image with the same kernel. Since scipy defaults to "full" mode, its outputs come out slightly bigger than ours (1537 × 2050 instead of 1535 × 2048 for the 3×3 box).</p>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part 1.1</p>
+            <ul>
+              <li>The two-loop version of the convolution, and how it compares.</li>
+              <li>D<sub>x</sub> and D<sub>y</sub> applied to my photo. The <span class="mono-inline">finite_difference</span> entry in CONVS multiplies D<sub>x</sub> and D<sub>y</sub> into a single kernel ([1, 0, −1] ⊗ [1, 0, −1]) instead of applying them one at a time, and its output was never saved.</li>
+              <li>Runtime numbers for four loops vs. two loops vs. <span class="mono-inline">scipy.signal.convolve2d</span>, plus a sentence on how scipy handles the boundaries.</li>
+              <li>Re-run part1dot1 and replace the four filtered images above. They come from an older run without the 1/k² prefactor and <span class="mono-inline">normalize()</span>: the 9×9 result only has a few gray levels (multiples of 81) and both scipy results saturate to white. Also, <span class="mono-inline">im = np.pad(im, k, …)</span> inside the loop pads <span class="mono-inline">im</span> again for every filter.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 1.2 ——————————————————————— -->
+        <section class="part" id="p12">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 1.2 · Finite difference operator</p>
+            <h2 class="reveal">Edges from differences</h2>
+            <p class="lede reveal">Now we can use <span class="mono-inline">scipy.signal.convolve2d</span>. We convolve the cameraman with the finite difference operators D<sub>x</sub> and D<sub>y</sub>, which respond to changes in intensity along x and along y. Then we combine the two partial derivatives into the gradient magnitude, which is large wherever there is an edge in any direction.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Finite difference operators</h3><span class="math" data-tex="D_x = \begin{bmatrix} 1 & 0 & -1 \end{bmatrix}, \qquad D_y = \begin{bmatrix} 1 & 0 & -1 \end{bmatrix}^{\top}">Dx = [1 0 −1], Dy = [1 0 −1]ᵀ</span>
+              <p>D<sub>x</sub> compares each pixel's neighbors on the left and right, and D<sub>y</sub> does the same above and below.</p>
+            </div>
+            <div class="formula">
+              <h3>Gradient magnitude</h3><span class="math" data-tex="\lVert \nabla I \rVert \,=\, \sqrt{(I * D_x)^{2} + (I * D_y)^{2}}">‖∇I‖ = √((I∗Dx)² + (I∗Dy)²)</span>
+              <p>We compute it pixel by pixel from the two derivative images.</p>
+            </div>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cameraman.png" width="540" height="542" loading="lazy" decoding="async" alt="The cameraman test image"></div>
+              <figcaption>Cameraman<span class="off">input</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dx.jpg" width="542" height="542" loading="lazy" decoding="async" alt="Partial derivative in x of the cameraman"></div>
+              <figcaption><span class="nt">∂I / ∂x</span><span class="off"><span class="nt">I ∗ D<sub>x</sub></span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dy.jpg" width="540" height="544" loading="lazy" decoding="async" alt="Partial derivative in y of the cameraman"></div>
+              <figcaption><span class="nt">∂I / ∂y</span><span class="off"><span class="nt">I ∗ D<sub>y</sub></span></span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_grad.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Gradient magnitude of the cameraman"></div>
+              <figcaption>Gradient magnitude<span class="off">‖∇I‖</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_edges.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Edge image: gradient magnitude clipped to between 11 and 225"></div>
+              <figcaption>Edge image<span class="off">clipped to [11, 225]</span></figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Choosing a threshold</p>
+            <p>I wanted to choose a threshold where all the noise disappears yet keeps all the edges in the foreground. If we allow for the tradeoff of removing background edges to get rid of the noise, that threshold is around &gt;67. However, the instructions for 1.2 and the followup in 1.3 seem to suggest we want to keep all the edges, and if we want to preserve the background edges too, we can only choose a very low (and mostly ineffective) threshold of &gt;11. So the edge image above uses &gt;11: the gradient magnitude is clipped to [11, 225] and normalized instead of being fully binarized (see the note at the end of 1.3).</p>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 1.3 ——————————————————————— -->
+        <section class="part" id="p13">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 1.3 · Derivative of Gaussian (DoG) filter</p>
+            <h2 class="reveal">Blur first, then differentiate</h2>
+            <p class="lede reveal">The finite difference results above are rather noisy. Luckily, we have a smoothing operator handy: the Gaussian. <span class="mono-inline">cv2.getGaussianKernel(18, 3)</span> gives a 1D Gaussian with σ = 3, and its outer product with itself is the 2D Gaussian G. We choose the kernel size to be about ±3σ. Then we repeat the steps from 1.2 on the blurred image.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Gaussian filter</h3><span class="math" data-tex="G \,=\, g\, g^{\top}, \qquad g = \texttt{getGaussianKernel}(18,\ 3)">G = g gᵀ, g = getGaussianKernel(18, 3)</span>
+              <p>18 taps with σ = 3 spans about ±3σ around the center.</p>
+            </div>
+            <div class="formula">
+              <h3>One convolution instead of two</h3><span class="math" data-tex="(I * G) * D_x \,=\, I * (G * D_x)">(I∗G)∗Dx = I∗(G∗Dx)</span>
+              <p>Convolution is associative, so we can fold D<sub>x</sub> and D<sub>y</sub> into the Gaussian once to get the derivative of Gaussian filters, and then convolve the image a single time.</p>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Two convolutions</p>
+            <h3 class="reveal">Blur, then D<sub>x</sub> and D<sub>y</sub></h3>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_blurred.png" width="540" height="542" loading="lazy" decoding="async" alt="The cameraman blurred with the Gaussian"></div>
+              <figcaption>Blurred<span class="off">I ∗ G</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dx_blur.jpg" width="559" height="559" loading="lazy" decoding="async" alt="x derivative of the blurred cameraman"></div>
+              <figcaption><span class="nt">∂ / ∂x</span> of blurred<span class="off"><span class="nt">(I ∗ G) ∗ D<sub>x</sub></span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dy_blur.jpg" width="557" height="561" loading="lazy" decoding="async" alt="y derivative of the blurred cameraman"></div>
+              <figcaption><span class="nt">∂ / ∂y</span> of blurred<span class="off"><span class="nt">(I ∗ G) ∗ D<sub>y</sub></span></span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_grad_blur.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Gradient magnitude of the blurred cameraman"></div>
+              <figcaption>Gradient magnitude<span class="off">blurred first</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_edges_blur.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Edge image of the blurred cameraman, no threshold"></div>
+              <figcaption>Edge image<span class="off">no clip, 0–255</span></figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">The DoG filters</p>
+            <h3 class="reveal">G, G ∗ D<sub>x</sub> and G ∗ D<sub>y</sub></h3>
+            <p class="reveal">Note we resize the kernels to be bigger for visualization purposes, and we normalize them so they are between 0 and 255 rather than having negative values.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/kernel_g.png" width="542" height="542" loading="lazy" decoding="async" alt="The 18 by 18 Gaussian kernel, enlarged"></div>
+              <figcaption>G<span class="off">18 × 18 · <span class="nt">σ = 3</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/kernel_g_dx.png" width="542" height="542" loading="lazy" decoding="async" alt="Derivative of Gaussian filter in x, enlarged"></div>
+              <figcaption><span class="nt">G ∗ D<sub>x</sub></span><span class="off">18 × 20</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/kernel_g_dy.png" width="542" height="542" loading="lazy" decoding="async" alt="Derivative of Gaussian filter in y, enlarged"></div>
+              <figcaption><span class="nt">G ∗ D<sub>y</sub></span><span class="off">20 × 18</span></figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">One convolution</p>
+            <h3 class="reveal">I ∗ (G ∗ D<sub>x</sub>) and I ∗ (G ∗ D<sub>y</sub>)</h3>
+          </div>
+          <div class="result-grid four">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dx_dog.jpg" width="559" height="559" loading="lazy" decoding="async" alt="x derivative using the DoG filter"></div>
+              <figcaption><span class="nt">∂ / ∂x</span><span class="off"><span class="nt">I ∗ (G ∗ D<sub>x</sub>)</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_dy_dog.jpg" width="557" height="561" loading="lazy" decoding="async" alt="y derivative using the DoG filter"></div>
+              <figcaption><span class="nt">∂ / ∂y</span><span class="off"><span class="nt">I ∗ (G ∗ D<sub>y</sub>)</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_grad_dog.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Gradient magnitude using the DoG filters"></div>
+              <figcaption>Gradient magnitude<span class="off">DoG</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/cam_edges_dog.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Edge image using the DoG filters"></div>
+              <figcaption>Edge image<span class="off">DoG</span></figcaption>
+            </figure>
+          </div>
+          <div class="compare narrow reveal" id="cmp-edges" style="margin-top: clamp(3rem, 7vh, 4.5rem);">
+            <img src="media/cam_edges_dog.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Edge image with the derivative of Gaussian">
+            <div class="top"><img src="media/cam_edges.jpg" width="540" height="542" loading="lazy" decoding="async" alt="Edge image with the plain finite difference"></div>
+            <div class="handle"></div><span class="tag a">Finite difference · 1.2</span> <span class="tag b">DoG · 1.3</span>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">What differences do you see?</p>
+            <p>Gaussian smoothing completely removes the speckles and noise, so much that the thresholding must also be removed to prevent edges from disappearing. Therefore, we moved the clip out compared to 1.2 (just 0–255, as expected) to allow the smoothing to remove the noise without removing the edges.</p>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Same result either way</p>
+            <p>Blurring first and using the DoG filters give the same images. The code checks this with <span class="mono-inline">np.allclose</span> for the x derivative, the y derivative, the gradient magnitude and the edge image, and the saved images from the two routes are identical byte for byte.</p>
+          </div>
+          <p class="footnote reveal">Note: the binarization of the gradient image was not done anywhere on this page, in 1.2 or 1.3, to avoid losing edges. TA Andrew Goldberg confirmed this is ok on <a href="https://edstem.org/us/courses/104372/discussion/8283676?comment=19325642">Ed ↗</a>.</p>
+        </section>
+
+        <!-- ——————————————————————— Part 2.1 ——————————————————————— -->
+        <section class="part" id="p21">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 2.1 · Image “sharpening”</p>
+            <h2 class="reveal">Unsharp masking</h2>
+            <p class="lede reveal">The unsharp mask filter essentially works by amplifying the high frequencies in an image. We find the low frequencies of the image with a Gaussian filter and subtract them from the original, which leaves only the high frequencies. Then we can amplify the high frequencies in the original image by adding an abundance of them back to it. Since high frequencies tend to be associated with the sharpness of an image, we've sharpened the image!</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Unsharp mask</h3><span class="math" data-tex="f_{\text{sharp}} \,=\, f + \alpha\,\bigl(f - f * g\bigr)">f_sharp = f + α (f − f∗g)</span>
+              <p>f ∗ g keeps the low frequencies, so f − f ∗ g is what is left: the high frequencies.</p>
+            </div>
+            <div class="formula">
+              <h3>As a single convolution</h3><span class="math" data-tex="f_{\text{sharp}} \,=\, f * \bigl((1+\alpha)\, e - \alpha\, g\bigr)">f_sharp = f ∗ ((1+α) e − α g)</span>
+              <p>e is the unit impulse. Our code uses α = 1 and a Gaussian with σ = 3, which makes the unsharp mask filter 2e − g.</p>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">The given image</p>
+            <h3 class="reveal">Taj Mahal</h3>
+          </div>
+          <div class="result-grid five">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/taj.jpg" width="300" height="300" loading="lazy" decoding="async" alt="The Taj Mahal, original color image"></div>
+              <figcaption>Original</figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/taj_gray.jpg" width="300" height="300" loading="lazy" decoding="async" alt="The Taj Mahal in grayscale"></div>
+              <figcaption>Grayscale<span class="off"><span class="nt">f</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/taj_blurred.jpg" width="300" height="300" loading="lazy" decoding="async" alt="The Taj Mahal blurred: its low frequencies"></div>
+              <figcaption>Low frequencies<span class="off"><span class="nt">f ∗ g</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/taj_high.jpg" width="300" height="300" loading="lazy" decoding="async" alt="The Taj Mahal's high frequencies"></div>
+              <figcaption>High frequencies<span class="off"><span class="nt">f − f ∗ g</span></span></figcaption>
+            </figure>
+            <figure class="frame" data-before="media/taj_gray.jpg">
+              <div class="frame-mask"><img src="media/taj_sharp.jpg" width="300" height="300" loading="lazy" decoding="async" alt="The Taj Mahal sharpened"></div>
+              <figcaption>Sharpened<span class="off"><span class="nt">α = 1</span></span></figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">My own already blurred images</p>
+            <h3 class="reveal">Four blurry photos</h3>
+            <p class="reveal">These photos were already blurry, so we sharpen them directly. Click a sharpened result to flip between before and after.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/tree.jpg" width="1600" height="1206" loading="lazy" decoding="async" alt="A blurry photo of a Christmas tree branch"></div>
+              <figcaption>Christmas tree<span class="off">original</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/tree_gray.jpg" width="1600" height="1206" loading="lazy" decoding="async" alt="The Christmas tree in grayscale"></div>
+              <figcaption>Christmas tree<span class="off">grayscale</span></figcaption>
+            </figure>
+            <figure class="frame" data-before="media/tree_gray.jpg">
+              <div class="frame-mask"><img src="media/tree_sharp.jpg" width="1600" height="1206" loading="lazy" decoding="async" alt="The Christmas tree sharpened"></div>
+              <figcaption>Christmas tree<span class="off">sharpened</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame pixelated">
+              <div class="frame-mask"><img src="media/ring.png" width="576" height="536" loading="lazy" decoding="async" alt="A tiny blurry photo of a ring"></div>
+              <figcaption>Ring<span class="off">original · 72 × 67 px, shown 8× larger</span></figcaption>
+            </figure>
+            <figure class="frame pixelated">
+              <div class="frame-mask"><img src="media/ring_gray.png" width="576" height="536" loading="lazy" decoding="async" alt="The ring in grayscale"></div>
+              <figcaption>Ring<span class="off">grayscale</span></figcaption>
+            </figure>
+            <figure class="frame pixelated" data-before="media/ring_gray.png">
+              <div class="frame-mask"><img src="media/ring_sharp.png" width="576" height="536" loading="lazy" decoding="async" alt="The ring sharpened, clipped to black and white"></div>
+              <figcaption>Ring<span class="off">sharpened</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/young_me_blur.jpg" width="1280" height="720" loading="lazy" decoding="async" alt="A blurry selfie of a younger me"></div>
+              <figcaption>Young me<span class="off">original</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/young_me_blur_gray.jpg" width="1280" height="720" loading="lazy" decoding="async" alt="The selfie in grayscale"></div>
+              <figcaption>Young me<span class="off">grayscale</span></figcaption>
+            </figure>
+            <figure class="frame" data-before="media/young_me_blur_gray.jpg">
+              <div class="frame-mask"><img src="media/young_me_blur_sharp.jpg" width="1280" height="720" loading="lazy" decoding="async" alt="The selfie sharpened"></div>
+              <figcaption>Young me<span class="off">sharpened</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/pfp.jpg" width="960" height="960" loading="lazy" decoding="async" alt="A blurry black and white profile picture"></div>
+              <figcaption>Profile picture<span class="off">original</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/pfp_gray.jpg" width="960" height="960" loading="lazy" decoding="async" alt="The profile picture in grayscale"></div>
+              <figcaption>Profile picture<span class="off">grayscale</span></figcaption>
+            </figure>
+            <figure class="frame" data-before="media/pfp_gray.jpg">
+              <div class="frame-mask"><img src="media/pfp_sharp.jpg" width="960" height="960" loading="lazy" decoding="async" alt="The profile picture sharpened"></div>
+              <figcaption>Profile picture<span class="off">sharpened</span></figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Evaluation</p>
+            <h3 class="reveal">A sharp image, blurred and re-sharpened</h3>
+            <p class="reveal">A sharp image, blurred and re-sharpened, compared side by side with the original sharp image (both grayscale).</p>
+          </div>
+          <div class="result-grid five">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/jelly.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish, original color photo"></div>
+              <figcaption>Jellyfish<span class="off">original</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/jelly_gray.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish in grayscale"></div>
+              <figcaption>Grayscale<span class="off">sharp original</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/jelly_blurred.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish blurred"></div>
+              <figcaption>Blurred<span class="off"><span class="nt">f ∗ g</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/jelly_high.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish high frequencies"></div>
+              <figcaption>High frequencies<span class="off"><span class="nt">f − f ∗ g</span></span></figcaption>
+            </figure>
+            <figure class="frame" data-before="media/jelly_gray.jpg">
+              <div class="frame-mask"><img src="media/jelly_sharp.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish sharpened"></div>
+              <figcaption>Sharpened<span class="off"><span class="nt">α = 1</span></span></figcaption>
+            </figure>
+          </div>
+          <div class="compare reveal" id="cmp-jelly" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <img src="media/jelly_sharp.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish sharpened">
+            <div class="top"><img src="media/jelly_gray.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Jellyfish, sharp grayscale original"></div>
+            <div class="handle"></div><span class="tag a">Original</span> <span class="tag b">Sharpened</span>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part 2.1</p>
+            <ul>
+              <li>Show how varying the sharpening amount α changes the result (for example α = 0.5, 1, 2 and 5).</li>
+              <li>The jellyfish "sharpened" image is <span class="mono-inline">im + (im − blur(im))</span> of the sharp original, so it isn't the blurred image re-sharpened. Sharpen the blurred jellyfish, compare it with the original, and write the observations.</li>
+              <li>Observations on my own photos (for example, the sharpened 72 × 67 ring clips to pure black and white).</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 2.2 ——————————————————————— -->
+        <section class="part" id="p22">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 2.2 · Hybrid images</p>
+            <h2 class="reveal">Close up, far away</h2>
+            <p class="lede reveal">Hybrid images change depending on how far away you look at them: high frequencies dominate up close, but from far away only the low frequencies survive. So we low-pass one image with a Gaussian, high-pass the other one by subtracting its own Gaussian blur, and add the two together. Before filtering, we click the same two points on both images and the starter code recenters, rescales and rotates them so they line up.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Hybrid image</h3><span class="math" data-tex="H \,=\, I_1 * G_{\sigma_1} \;+\; \bigl(I_2 - I_2 * G_{\sigma_2}\bigr)">H = I₁∗G_σ₁ + (I₂ − I₂∗G_σ₂)</span>
+              <p>Every pair gets its own cutoffs (σ<sub>1</sub>, σ<sub>2</sub>) and a flag for which image gets the high-pass filter. All of our pairs use σ = 10 for the first image and σ = 15 for the second, and the sum is normalized.</p>
+            </div>
+            <div class="formula">
+              <h3>Frequency analysis</h3><span class="math" data-tex="\log \bigl\lvert\, \mathcal{F}\{I\} \,\bigr\rvert">log |F(I)|</span>
+              <p>For the fridge pair we show the log magnitude of the Fourier transform at every step: <span class="mono-inline">np.log(np.abs(np.fft.fftshift(np.fft.fft2(im))))</span>. Note we normalize these images for visualization purposes.</p>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Hybrid 01 · the full process</p>
+            <h3 class="reveal">Fridge → Thanksgiving stuffing</h3>
+            <p class="reveal">The one you can see close up is the Thanksgiving stuffing, and the one far away is all the ingredients it took to create it from the fridge.</p>
+          </div>
+          <div class="result-grid two inputs">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fridge.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="An open fridge full of ingredients"></div>
+              <figcaption>Fridge<span class="off">low-pass · <span class="nt">σ = 10</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/stuffing.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="A dish of Thanksgiving stuffing"></div>
+              <figcaption>Thanksgiving stuffing<span class="off">high-pass · <span class="nt">σ = 15</span></span></figcaption>
+            </figure>
+          </div>
+          <div class="hybrid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Hybrid of the fridge and the stuffing"></div>
+              <figcaption>Hybrid<span class="off">up close</span></figcaption>
+            </figure>
+            <figure class="frame far">
+              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
+              <figcaption>From far</figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Fourier transforms · log magnitude</p>
+            <h3 class="reveal">Every step, in frequency</h3>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_fridge.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Log magnitude spectrum of the fridge input"></div>
+              <figcaption>Fridge<span class="off">input</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_fridge_aligned.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned fridge"></div>
+              <figcaption>Fridge<span class="off">aligned</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_fridge_low.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the low-passed fridge"></div>
+              <figcaption>Fridge<span class="off">low-passed</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_stuffing.jpg" width="1600" height="1200" loading="lazy" decoding="async" alt="Log magnitude spectrum of the stuffing input"></div>
+              <figcaption>Stuffing<span class="off">input</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_stuffing_aligned.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned stuffing"></div>
+              <figcaption>Stuffing<span class="off">aligned</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_stuffing_high.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the high-passed stuffing"></div>
+              <figcaption>Stuffing<span class="off">high-passed</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fft_hybrid.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the hybrid image"></div>
+              <figcaption>Hybrid<span class="off">sum of both</span></figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Hybrid 02</p>
+            <h3 class="reveal">Derek + Nutmeg</h3>
+          </div>
+          <div class="result-grid two inputs narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/nutmeg.jpg" width="1408" height="1056" loading="lazy" decoding="async" alt="Nutmeg the cat"></div>
+              <figcaption>Nutmeg<span class="off">high-pass · <span class="nt">σ = 10</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/derek.jpg" width="732" height="1024" loading="lazy" decoding="async" alt="Derek"></div>
+              <figcaption>Derek<span class="off">low-pass · <span class="nt">σ = 15</span></span></figcaption>
+            </figure>
+          </div>
+          <div class="hybrid" style="max-width: 640px;">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/hybrid_nutmeg_derek.jpg" width="737" height="1285" loading="lazy" decoding="async" alt="Hybrid of Nutmeg and Derek"></div>
+              <figcaption>Hybrid<span class="off">up close</span></figcaption>
+            </figure>
+            <figure class="frame far">
+              <div class="frame-mask"><img src="media/hybrid_nutmeg_derek.jpg" width="737" height="1285" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
+              <figcaption>From far</figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Hybrid 03</p>
+            <h3 class="reveal">Me, close and far</h3>
+          </div>
+          <div class="result-grid two inputs narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_close.jpg" width="1085" height="1447" loading="lazy" decoding="async" alt="Me photographed from close up"></div>
+              <figcaption>Close<span class="off">high-pass · <span class="nt">σ = 10</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_far.jpg" width="1085" height="1447" loading="lazy" decoding="async" alt="Me photographed from farther away"></div>
+              <figcaption>Far<span class="off">low-pass · <span class="nt">σ = 15</span></span></figcaption>
+            </figure>
+          </div>
+          <div class="hybrid" style="max-width: 640px;">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/hybrid_me_close_far.jpg" width="1095" height="1412" loading="lazy" decoding="async" alt="Hybrid of the close and far photos of me"></div>
+              <figcaption>Hybrid<span class="off">up close</span></figcaption>
+            </figure>
+            <figure class="frame far">
+              <div class="frame-mask"><img src="media/hybrid_me_close_far.jpg" width="1095" height="1412" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
+              <figcaption>From far</figcaption>
+            </figure>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Hybrid 04</p>
+            <h3 class="reveal">Me, 6 years apart</h3>
+          </div>
+          <div class="result-grid two inputs narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/young_me.jpg" width="1033" height="1447" loading="lazy" decoding="async" alt="A younger me standing in a park"></div>
+              <figcaption>Younger me<span class="off">high-pass · <span class="nt">σ = 10</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/me_far.jpg" width="1085" height="1447" loading="lazy" decoding="async" alt="Me now"></div>
+              <figcaption>Me now<span class="off">low-pass · <span class="nt">σ = 15</span></span></figcaption>
+            </figure>
+          </div>
+          <div class="hybrid" style="max-width: 520px;">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/hybrid_young_me.jpg" width="450" height="612" loading="lazy" decoding="async" alt="Hybrid of me six years apart"></div>
+              <figcaption>Hybrid<span class="off">up close</span></figcaption>
+            </figure>
+            <figure class="frame far">
+              <div class="frame-mask"><img src="media/hybrid_young_me.jpg" width="450" height="612" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
+              <figcaption>From far</figcaption>
+            </figure>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part 2.2</p>
+            <ul>
+              <li>How I chose the cutoff frequencies (σ<sub>1</sub> = 10, σ<sub>2</sub> = 15).</li>
+              <li>The aligned and filtered images (in the spatial domain) for the fridge pair: part2dot2 only saves their Fourier transforms.</li>
+              <li>Optional: a sentence on each hybrid, e.g. what you see up close vs. from far away.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 2.3 ——————————————————————— -->
+        <section class="part" id="p23">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 2.3 · Gaussian and Laplacian stacks</p>
+            <h2 class="reveal">Stacks, not pyramids</h2>
+            <p class="lede reveal">A stack is like a pyramid without the downsampling, so every level stays the same size as the original image. To make each Gaussian level, we blur the previous level again, and σ doubles every time, so the stack behaves like a pyramid that halves in size at every level. Each Laplacian level is the difference between two neighboring Gaussian levels, and the last Laplacian level is just the last Gaussian level, so adding up the whole Laplacian stack gives back the original image.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Gaussian stack</h3><span class="math" data-tex="G_0 = I, \qquad G_i = G_{i-1} * g_{\sigma_i}, \qquad \sigma_i = 3 \cdot 0.95 \cdot 2^{\,i-1}">G₀ = I, Gᵢ = Gᵢ₋₁ ∗ g_σᵢ, σᵢ = 3 · 0.95 · 2^(i−1)</span>
+              <p>σ goes 2.85, 5.7, 11.4, … up to 182.4 pixels at the eighth level.</p>
+            </div>
+            <div class="formula">
+              <h3>Laplacian stack</h3><span class="math" data-tex="L_i = G_i - G_{i+1}, \qquad L_7 = G_7, \qquad \textstyle\sum_{i=0}^{7} L_i = I">Lᵢ = Gᵢ − Gᵢ₊₁, L₇ = G₇, Σ Lᵢ = I</span>
+              <p>The Laplacian levels have negative values, so every level is normalized to 0–255 for display.</p>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Apple · Gaussian stack</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 0"></div><figcaption>G0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 1"></div><figcaption>G1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 2"></div><figcaption>G2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 3"></div><figcaption>G3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 4"></div><figcaption>G4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 5"></div><figcaption>G5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 6"></div><figcaption>G6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_g_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Gaussian stack level 7"></div><figcaption>G7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Apple · Laplacian stack</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_l_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Apple, Laplacian stack level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Orange · Gaussian stack</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 0"></div><figcaption>G0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 1"></div><figcaption>G1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 2"></div><figcaption>G2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 3"></div><figcaption>G3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 4"></div><figcaption>G4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 5"></div><figcaption>G5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 6"></div><figcaption>G6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_g_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Gaussian stack level 7"></div><figcaption>G7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Orange · Laplacian stack</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_l_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Orange, Laplacian stack level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Szeliski Figure 3.42, recreated</p>
+            <h3 class="reveal">The oraple, level by level</h3>
+            <p class="reveal">Rows are Laplacian levels 0, 2 and 4: high, medium and low frequencies. Columns are the apple masked by the left half, the orange masked by the right half, and their sum.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 0"></div><figcaption>(a) Apple · L0<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 0"></div><figcaption>(b) Orange · L0<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended Laplacian level 0"></div><figcaption>(c) Blend · L0</figcaption></figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 2"></div><figcaption>(d) Apple · L2<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 2"></div><figcaption>(e) Orange · L2<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended Laplacian level 2"></div><figcaption>(f) Blend · L2</figcaption></figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 4"></div><figcaption>(g) Apple · L4<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 4"></div><figcaption>(h) Orange · L4<span class="off">masked</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended Laplacian level 4"></div><figcaption>(i) Blend · L4</figcaption></figure>
+          </div>
+          <div class="result-grid">
+            <figure class="missing-wrap"><div class="missing">(j) masked apple,<br>all levels summed<br>not saved yet</div><figcaption>(j) Apple · reconstructed</figcaption></figure>
+            <figure class="missing-wrap"><div class="missing">(k) masked orange,<br>all levels summed<br>not saved yet</div><figcaption>(k) Orange · reconstructed</figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/oraple.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The final oraple"></div><figcaption>(l) The oraple<span class="off">all levels summed</span></figcaption></figure>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Masked apple · every Laplacian level</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/apple_lm_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked apple, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Masked orange · every Laplacian level</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/orange_lm_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Masked orange, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Blend · every level</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_0.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_1.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_2.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_3.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_5.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part 2.3</p>
+            <ul>
+              <li>Figure 3.42 (j) and (k): the masked apple and the masked orange with all of their levels summed. part2dot3 doesn't save these; summing <span class="mono-inline">laplacian_stack_a_masked</span> and <span class="mono-inline">laplacian_stack_o_masked</span> separately would give them.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part 2.4 ——————————————————————— -->
+        <section class="part" id="p24">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part 2.4 · Multiresolution blending</p>
+            <h2 class="reveal">The Oraple, and friends</h2>
+            <p class="lede reveal">To blend two images, we also build a Gaussian stack of the mask. At every level, the first image's Laplacian level is weighted by 255 − M<sub>i</sub> and the second image's by M<sub>i</sub>, where M<sub>i</sub> is level i of the mask's Gaussian stack. Then we add the two together and sum all of the blended levels back up into the final image.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Mask stack</h3><span class="math" data-tex="M_0 = \text{mask}, \qquad M_i = M_{i-1} * g_{\sigma_i}">M₀ = mask, Mᵢ = Mᵢ₋₁ ∗ g_σᵢ</span>
+              <p>The mask goes through the same σ schedule as the two images.</p>
+            </div>
+            <div class="formula">
+              <h3>Blend</h3><span class="math" data-tex="B \,=\, \sum_{i=0}^{7} \Bigl[\, (1 - M_i)\, L^{A}_i \;+\; M_i\, L^{B}_i \,\Bigr]">B = Σᵢ [ (1 − Mᵢ) Lᴬᵢ + Mᵢ Lᴮᵢ ]</span>
+              <p>In the code the mask stays in 0–255 instead of 0–1, and the final sum is normalized.</p>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Vertical seam</p>
+            <h3 class="reveal">The Oraple</h3>
+            <p class="reveal">Orange is on the right and the Gaussian mask has white on the right.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/apple.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The apple"></div>
+              <figcaption>Apple<span class="off">first image</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mask_half.png" width="1000" height="697" loading="lazy" decoding="async" alt="Step mask: black on the left half, white on the right half"></div>
+              <figcaption>Mask<span class="off">white on the right half</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/orange.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The orange"></div>
+              <figcaption>Orange<span class="off">second image</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/apple_masked.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The apple masked to its left half"></div>
+              <figcaption>Masked apple<span class="off">level 0</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/orange_masked.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The orange masked to its right half"></div>
+              <figcaption>Masked orange<span class="off">level 0</span></figcaption>
+            </figure>
+          </div>
+          <figure class="frame frame-wide" style="margin-top: clamp(2rem, 5vh, 3rem);">
+            <div class="frame-mask"><img src="media/oraple.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The oraple: half apple, half orange, blended"></div>
+            <figcaption>The Oraple<span class="off">multiresolution blend</span></figcaption>
+          </figure>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Vertical seam · my own pair</p>
+            <h3 class="reveal">Two mountain ranges</h3>
+            <p class="reveal">These two mountain range images look really similar but are different. We blend them with the same left/right mask.</p>
+          </div>
+          <div class="result-grid two">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mountain1.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="First mountain range above a turquoise lake"></div>
+              <figcaption>Mountains 1<span class="off">left half</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mountain2.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="Second mountain range above a turquoise lake"></div>
+              <figcaption>Mountains 2<span class="off">right half</span></figcaption>
+            </figure>
+          </div>
+          <figure class="frame frame-wide" style="margin-top: clamp(2rem, 5vh, 3rem);">
+            <div class="frame-mask"><img src="media/mountains.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="The two mountain ranges blended into one"></div>
+            <figcaption>Blended<span class="off">mountains 1 + mountains 2</span></figcaption>
+          </figure>
+          <div class="strip reveal">
+            <p class="strip-label">Masked mountains 1 · Laplacian levels</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_0.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_1.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_2.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_3.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_4.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_5.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_6.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain1_lm_7.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 1, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Masked mountains 2 · Laplacian levels</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_0.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_1.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_2.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_3.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_4.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_5.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_6.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountain2_lm_7.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Masked mountains 2, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Blend · every level</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_0.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_1.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_2.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_3.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_4.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_5.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_6.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mountains_l_7.jpg" width="1000" height="625" loading="lazy" decoding="async" alt="Blended mountains, level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Irregular mask · my own pair</p>
+            <h3 class="reveal">My sister's head, my mom's sweater</h3>
+            <p class="reveal">For an irregular mask, I drew a line along the chin, and out across the background, on both photos. The mask for this pair was generated by AI from those outlines: white above the chin line and black below it, so the head comes from my sister and everything below the chin comes from my mom.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/outline_mom.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Mom's photo with a hand-drawn white line along her chin"></div>
+              <figcaption>Mom<span class="off">chin outline</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/outline_sister.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Sister's photo with a hand-drawn white line along her chin"></div>
+              <figcaption>Sister<span class="off">chin outline</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mask_chin.png" width="1200" height="1600" loading="lazy" decoding="async" alt="The chin mask: white above the chin line, black below"></div>
+              <figcaption>Mask<span class="off">generated by AI</span></figcaption>
+            </figure>
+          </div>
+          <div class="result-grid">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mom.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="My mom"></div>
+              <figcaption>Mom<span class="off">first image · below the chin</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/sister.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="My sister"></div>
+              <figcaption>Sister<span class="off">second image · above the chin</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/sister_on_mom.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Blend: my sister's head on my mom's body"></div>
+              <figcaption>Blended<span class="off">sister + mom</span></figcaption>
+            </figure>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Mask · Gaussian stack</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_0.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 0"></div><figcaption>M0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_1.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 1"></div><figcaption>M1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_2.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 2"></div><figcaption>M2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_3.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 3"></div><figcaption>M3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_4.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 4"></div><figcaption>M4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_5.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 5"></div><figcaption>M5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_6.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 6"></div><figcaption>M6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mask_chin_g_7.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Chin mask, Gaussian stack level 7"></div><figcaption>M7</figcaption></figure>
+            </div>
+          </div>
+
+          <div class="sub-head">
+            <p class="eyebrow reveal">Figure 10 style · Laplacian stack</p>
+            <h3 class="reveal">Inside the blend</h3>
+            <p class="reveal">The masked input images that created the blend, and every level of their Laplacian stacks.</p>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mom_masked.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Mom masked to below the chin line"></div>
+              <figcaption>Masked mom<span class="off">level 0</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/sister_masked.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Sister masked to above the chin line"></div>
+              <figcaption>Masked sister<span class="off">level 0</span></figcaption>
+            </figure>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Masked mom · Laplacian levels</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_0.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_1.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_2.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_3.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_4.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_5.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_6.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/mom_lm_7.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked mom, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Masked sister · Laplacian levels</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_0.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_1.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_2.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_3.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_4.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_5.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_6.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_lm_7.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Masked sister, Laplacian level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="strip reveal">
+            <p class="strip-label">Blend · every level</p>
+            <div class="strip-row">
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_0.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 0"></div><figcaption>L0</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_1.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 1"></div><figcaption>L1</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_2.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 2"></div><figcaption>L2</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_3.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 3"></div><figcaption>L3</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_4.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 4"></div><figcaption>L4</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_5.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 5"></div><figcaption>L5</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_6.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 6"></div><figcaption>L6</figcaption></figure>
+              <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_7.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 7"></div><figcaption>L7</figcaption></figure>
+            </div>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part 2.4</p>
+            <ul>
+              <li>Observations on each blend, such as how the seam looks at each level, and which result is my favorite (the mom and sister blend is the one illustrated above).</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Takeaway ——————————————————————— -->
+        <section class="part" id="learned">
+          <header class="part-head">
+            <p class="eyebrow reveal">Takeaway</p>
+            <h2 class="reveal">What I learned</h2>
+          </header>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · required</p>
+            <p>The most important thing I learned from this project.</p>
+          </div>
+        </section>
+
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <span>convolve · blur · subtract · sharpen · hybridize · stack · blend&nbsp;·&nbsp;</span> <span>convolve · blur · subtract · sharpen · hybridize · stack · blend&nbsp;·&nbsp;</span>
+          </div>
+        </div>
+        <footer class="colophon">
+          <p class="colophon-title reveal">Frequencies, put back together.</p>
+          <div class="colophon-meta reveal">
+            <p>Andrew Boldi — CS180: Intro to Computer Vision &amp; Computational Photography<br>
+            UC Berkeley · Fall 2026</p>
+            <p class="colophon-links"><a href="https://cal-cs180.github.io/fa26/hw/proj2/index.html">Assignment ↗</a> <span aria-hidden="true">·</span> <a href="../">All projects ↗</a></p>
+            <p class="colophon-fine">Built with Three.js + GSAP · drag the sliders · click any image to zoom</p>
+          </div>
+        </footer>
+      </main>
+    </div>
+  </div>
+  <div class="lightbox" id="lightbox" hidden="">
+    <div class="lb-backdrop" data-close=""></div>
+    <div class="lb-stage" id="lb-stage"><img id="lb-img" src="" alt="Enlarged view"></div>
+    <header class="lb-bar">
+      <span class="lb-title" id="lb-title"></span> <span class="lb-off" id="lb-off"></span>
+      <div class="lb-toggle" id="lb-toggle" hidden="">
+        <button type="button" data-view="before">Before</button> <button type="button" data-view="after" class="on">After</button>
+      </div>
+      <div class="lb-zoom">
+        <button type="button" id="lb-zoom-out" aria-label="Zoom out">−</button> <button type="button" id="lb-zoom-reset">100%</button> <button type="button" id="lb-zoom-in" aria-label="Zoom in">+</button>
+      </div><button type="button" class="lb-close" id="lb-close" aria-label="Close">✕</button>
+    </header>
+  </div>
+  <script>
+    if (document.documentElement.classList.contains('print-mode')) {
+      document.querySelectorAll('img[loading="lazy"]').forEach(function (img) { img.loading = 'eager'; });
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollSmoother.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
