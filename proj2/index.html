@@ -115,29 +115,29 @@ w, h = im.shape
               <figcaption>Box 3×3<span class="off">four loops</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/me_box3_scipy.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 3 by 3 box filter with scipy.signal.convolve2d, mostly saturated to white"></div>
+              <div class="frame-mask"><img src="media/me_box3_scipy.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 3 by 3 box filter with scipy.signal.convolve2d"></div>
               <figcaption>Box 3×3<span class="off">scipy convolve2d</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/me_box9.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter, four-loop version, posterized into a few gray levels"></div>
+              <div class="frame-mask"><img src="media/me_box9.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter, four-loop version"></div>
               <figcaption>Box 9×9<span class="off">four loops</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/me_box9_scipy.jpg" width="1201" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter with scipy.signal.convolve2d, almost entirely white"></div>
+              <div class="frame-mask"><img src="media/me_box9_scipy.jpg" width="1203" height="1600" loading="lazy" decoding="async" alt="Portrait after the 9 by 9 box filter with scipy.signal.convolve2d"></div>
               <figcaption>Box 9×9<span class="off">scipy convolve2d</span></figcaption>
             </figure>
           </div>
           <div class="notes reveal">
             <p class="notes-label">Comparing with scipy</p>
-            <p>We compare every result to <span class="mono-inline">scipy.signal.convolve2d</span>, run on the same zero padded image with the same kernel. Since scipy defaults to "full" mode, its outputs come out slightly bigger than ours (1537 × 2050 instead of 1535 × 2048 for the 3×3 box).</p>
+            <p>We compare every result to <span class="mono-inline">scipy.signal.convolve2d</span>, run on the same zero padded image with the same kernel. Since scipy defaults to "full" mode and we hand it the already padded image, its outputs come out a little bigger than ours (1539 × 2052 instead of 1535 × 2048 for the 3×3 box). Once we crop off that extra 2-pixel border, the 3×3 results match to within a quarter of a gray level. On my 1535 × 2048 photo, the four-loop version took 15 s for the 3×3 box and 2 min 7 s for the 9×9 box, which lines up with the (2k + 1)² factor: 81 multiply-adds per pixel instead of 9.</p>
           </div>
           <div class="todo reveal">
             <p class="todo-label">TODO · Part 1.1</p>
             <ul>
               <li>The two-loop version of the convolution, and how it compares.</li>
-              <li>D<sub>x</sub> and D<sub>y</sub> applied to my photo. The <span class="mono-inline">finite_difference</span> entry in CONVS multiplies D<sub>x</sub> and D<sub>y</sub> into a single kernel ([1, 0, −1] ⊗ [1, 0, −1]) instead of applying them one at a time, and its output was never saved.</li>
-              <li>Runtime numbers for four loops vs. two loops vs. <span class="mono-inline">scipy.signal.convolve2d</span>, plus a sentence on how scipy handles the boundaries.</li>
-              <li>Re-run part1dot1 and replace the four filtered images above. They come from an older run without the 1/k² prefactor and <span class="mono-inline">normalize()</span>: the 9×9 result only has a few gray levels (multiples of 81) and both scipy results saturate to white. Also, <span class="mono-inline">im = np.pad(im, k, …)</span> inside the loop pads <span class="mono-inline">im</span> again for every filter.</li>
+              <li>D<sub>x</sub> and D<sub>y</sub> applied to my photo. The <span class="mono-inline">finite_difference</span> entry in CONVS multiplies D<sub>x</sub> and D<sub>y</sub> into a single kernel ([1, 0, −1] ⊗ [1, 0, −1]) instead of applying them one at a time, so <span class="mono-inline">me_finite_difference.jpg</span> is neither D<sub>x</sub> nor D<sub>y</sub>.</li>
+              <li>Runtimes for two loops and for <span class="mono-inline">scipy.signal.convolve2d</span> to compare with the four-loop times above, plus a sentence on how scipy handles the boundaries.</li>
+              <li>Optional fix: <span class="mono-inline">im = np.pad(im, k, …)</span> inside the loop pads <span class="mono-inline">im</span> again for every filter, so the 9×9 box runs on an image that was already padded for the 3×3.</li>
             </ul>
           </div>
         </section>
@@ -599,12 +599,14 @@ w, h = im.shape
               <figcaption>From far</figcaption>
             </figure>
           </div>
+          <div class="notes reveal">
+            <p class="notes-label">Choosing the cutoffs</p>
+            <p>I chose σ = 10 and σ = 15 because it seemed like a natural balance for enhancing the high frequencies and removing the lower ones.</p>
+          </div>
           <div class="todo reveal">
             <p class="todo-label">TODO · Part 2.2</p>
             <ul>
-              <li>How I chose the cutoff frequencies (σ<sub>1</sub> = 10, σ<sub>2</sub> = 15).</li>
-              <li>The aligned and filtered images (in the spatial domain) for the fridge pair: part2dot2 only saves their Fourier transforms.</li>
-              <li>Optional: a sentence on each hybrid, e.g. what you see up close vs. from far away.</li>
+              <li>The aligned and filtered images (in the spatial domain) for the fridge pair. part2dot2 now saves them, but re-running it needs my clicks for <span class="mono-inline">align_images</span>.</li>
             </ul>
           </div>
         </section>
@@ -700,8 +702,8 @@ w, h = im.shape
             <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_4.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended Laplacian level 4"></div><figcaption>(i) Blend · L4</figcaption></figure>
           </div>
           <div class="result-grid">
-            <figure class="missing-wrap"><div class="missing">(j) masked apple,<br>all levels summed<br>not saved yet</div><figcaption>(j) Apple · reconstructed</figcaption></figure>
-            <figure class="missing-wrap"><div class="missing">(k) masked orange,<br>all levels summed<br>not saved yet</div><figcaption>(k) Orange · reconstructed</figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/apple_recon.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="Masked apple with all of its Laplacian levels summed"></div><figcaption>(j) Apple · reconstructed<span class="off">masked levels summed</span></figcaption></figure>
+            <figure class="frame"><div class="frame-mask"><img src="media/orange_recon.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="Masked orange with all of its Laplacian levels summed"></div><figcaption>(k) Orange · reconstructed<span class="off">masked levels summed</span></figcaption></figure>
             <figure class="frame"><div class="frame-mask"><img src="media/oraple.jpg" width="1600" height="1115" loading="lazy" decoding="async" alt="The final oraple"></div><figcaption>(l) The oraple<span class="off">all levels summed</span></figcaption></figure>
           </div>
           <div class="strip reveal">
@@ -742,12 +744,6 @@ w, h = im.shape
               <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_6.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 6"></div><figcaption>L6</figcaption></figure>
               <figure class="frame"><div class="frame-mask"><img src="media/oraple_l_7.jpg" width="1000" height="697" loading="lazy" decoding="async" alt="Blended oraple, level 7"></div><figcaption>L7</figcaption></figure>
             </div>
-          </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part 2.3</p>
-            <ul>
-              <li>Figure 3.42 (j) and (k): the masked apple and the masked orange with all of their levels summed. part2dot3 doesn't save these; summing <span class="mono-inline">laplacian_stack_a_masked</span> and <span class="mono-inline">laplacian_stack_o_masked</span> separately would give them.</li>
-            </ul>
           </div>
         </section>
 
@@ -963,11 +959,9 @@ w, h = im.shape
               <figure class="frame"><div class="frame-mask"><img src="media/sister_on_mom_l_7.jpg" width="750" height="1000" loading="lazy" decoding="async" alt="Blended sister and mom, level 7"></div><figcaption>L7</figcaption></figure>
             </div>
           </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part 2.4</p>
-            <ul>
-              <li>Observations on each blend, such as how the seam looks at each level, and which result is my favorite (the mom and sister blend is the one illustrated above).</li>
-            </ul>
+          <div class="notes reveal">
+            <p class="notes-label">Observations</p>
+            <p>My observation is that the alignment of the images is a really important thing. In the apple and orange images, we had the tops and bottoms guiding the shape of the objects, which made the transition look seamless everywhere. In the mountains, however, the height of the lake is different in the two images, so it looks unnatural (same with mom/sister). However, the blend from left to right does indeed look really smooth in both.</p>
           </div>
         </section>
 
@@ -976,11 +970,8 @@ w, h = im.shape
           <header class="part-head">
             <p class="eyebrow reveal">Takeaway</p>
             <h2 class="reveal">What I learned</h2>
+            <p class="lede reveal">Overall, I learned in this project the power of Gaussian filters and the way they can be manipulated and combined for smoothing effects and for making seamless transitions between images.</p>
           </header>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · required</p>
-            <p>The most important thing I learned from this project.</p>
-          </div>
         </section>
 
         <div class="marquee" aria-hidden="true">
