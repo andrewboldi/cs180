@@ -476,13 +476,31 @@ w, h = im.shape
               <figcaption>Thanksgiving stuffing<span class="off">high-pass · <span class="nt">σ = 15</span></span></figcaption>
             </figure>
           </div>
+          <div class="result-grid four" style="margin-bottom: clamp(1.6rem, 3.5vw, 2.6rem);">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fridge_aligned.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="The fridge after alignment"></div>
+              <figcaption>Fridge<span class="off">aligned</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/stuffing_aligned.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="The stuffing after alignment"></div>
+              <figcaption>Stuffing<span class="off">aligned</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/fridge_low.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="The aligned fridge, low-pass filtered"></div>
+              <figcaption>Fridge<span class="off">low-passed · <span class="nt">σ = 10</span></span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/stuffing_high.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="The aligned stuffing, high-pass filtered"></div>
+              <figcaption>Stuffing<span class="off">high-passed · <span class="nt">σ = 15</span></span></figcaption>
+            </figure>
+          </div>
           <div class="hybrid">
             <figure class="frame">
-              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Hybrid of the fridge and the stuffing"></div>
+              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Hybrid of the fridge and the stuffing"></div>
               <figcaption>Hybrid<span class="off">up close</span></figcaption>
             </figure>
             <figure class="frame far">
-              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
+              <div class="frame-mask"><img src="media/hybrid_fridge_stuffing.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="The same hybrid shown small, as if from far away"></div>
               <figcaption>From far</figcaption>
             </figure>
           </div>
@@ -496,11 +514,11 @@ w, h = im.shape
               <figcaption>Fridge<span class="off">input</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/fft_fridge_aligned.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned fridge"></div>
+              <div class="frame-mask"><img src="media/fft_fridge_aligned.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned fridge"></div>
               <figcaption>Fridge<span class="off">aligned</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/fft_fridge_low.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the low-passed fridge"></div>
+              <div class="frame-mask"><img src="media/fft_fridge_low.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Log magnitude spectrum of the low-passed fridge"></div>
               <figcaption>Fridge<span class="off">low-passed</span></figcaption>
             </figure>
           </div>
@@ -510,17 +528,17 @@ w, h = im.shape
               <figcaption>Stuffing<span class="off">input</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/fft_stuffing_aligned.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned stuffing"></div>
+              <div class="frame-mask"><img src="media/fft_stuffing_aligned.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Log magnitude spectrum of the aligned stuffing"></div>
               <figcaption>Stuffing<span class="off">aligned</span></figcaption>
             </figure>
             <figure class="frame">
-              <div class="frame-mask"><img src="media/fft_stuffing_high.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the high-passed stuffing"></div>
+              <div class="frame-mask"><img src="media/fft_stuffing_high.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Log magnitude spectrum of the high-passed stuffing"></div>
               <figcaption>Stuffing<span class="off">high-passed</span></figcaption>
             </figure>
           </div>
           <div class="result-grid">
             <figure class="frame">
-              <div class="frame-mask"><img src="media/fft_hybrid.jpg" width="1105" height="835" loading="lazy" decoding="async" alt="Log magnitude spectrum of the hybrid image"></div>
+              <div class="frame-mask"><img src="media/fft_hybrid.jpg" width="1053" height="787" loading="lazy" decoding="async" alt="Log magnitude spectrum of the hybrid image"></div>
               <figcaption>Hybrid<span class="off">sum of both</span></figcaption>
             </figure>
           </div>
@@ -602,12 +620,6 @@ w, h = im.shape
           <div class="notes reveal">
             <p class="notes-label">Choosing the cutoffs</p>
             <p>I chose σ = 10 and σ = 15 because it seemed like a natural balance for enhancing the high frequencies and removing the lower ones.</p>
-          </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part 2.2</p>
-            <ul>
-              <li>The aligned and filtered images (in the spatial domain) for the fridge pair. part2dot2 now saves them, but re-running it needs my clicks for <span class="mono-inline">align_images</span>.</li>
-            </ul>
           </div>
         </section>
 
