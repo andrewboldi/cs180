@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 3 — The Power of Flow Models</title>
+<meta name="description" content="CS180 Project 3 — pretrained flow-model sampling, guidance and editing (Part A); flow matching from scratch on MNIST (Part B).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Italiana&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root { --paper:#F6F1E7; --ink:#262015; --muted:#6B5E48; --accent:#7C5E31; --line:#D9CDB6; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:300 17px/1.6 Jost, system-ui, sans-serif; }
+header { position:sticky; top:0; z-index:2; background:var(--paper); border-bottom:1px solid var(--line); padding:10px 16px; display:flex; flex-wrap:wrap; gap:4px 14px; font-size:14px; }
+header a { color:var(--accent); text-decoration:none; }
+main { max-width:1100px; margin:0 auto; padding:24px 16px 80px; }
+h1, h2 { font-family:Italiana, serif; font-weight:400; }
+h1 { font-size:clamp(36px, 6vw, 64px); margin:24px 0 4px; }
+h2 { font-size:30px; border-top:1px solid var(--line); padding-top:28px; margin-top:48px; }
+.eyebrow { color:var(--muted); letter-spacing:.12em; text-transform:uppercase; font-size:13px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:16px; }
+figure { margin:0; break-inside:avoid; }
+figure.wide { grid-column:1 / -1; }
+img { width:100%; height:auto; display:block; border:1px solid var(--line); background:#fff; }
+figcaption { font-size:14px; color:var(--muted); margin-top:4px; }
+.todo { border:2px dashed #B5452B; color:#B5452B; padding:12px 16px; margin-top:16px; font-weight:500; }
+@media print { header { display:none; } body { font-size:12pt; } h2 { break-after:avoid; } img { max-height:9in; object-fit:contain; } }
+</style>
+</head>
+<body>
+<header><a href="../">Index</a> <a href="#a11">A 1.1</a> <a href="#a12">1.2</a> <a href="#a13">1.3</a> <a href="#a14">1.4</a> <a href="#a15">1.5</a> <a href="#a16">1.6</a> <a href="#a21">2.1</a> <a href="#a31">3.1</a> <a href="#a32">3.2</a> <a href="#a33">3.3</a> <a href="#a34">3.4</a> <a href="#b12">B 1.2</a> <a href="#b121">1.2.1</a> <a href="#b122">1.2.2</a> <a href="#b123">1.2.3</a> <a href="#b23">2.3</a> <a href="#b26">2.6</a></header>
+<main>
+<p class="eyebrow">CS180 · Fall 2026 · Andrew Boldi</p>
+<h1>The Power of Flow Models</h1>
+<p>Part A samples, guides and edits images with a pretrained text-to-image flow model. Part B builds and trains a flow-matching UNet from scratch on MNIST.</p>
+<section id="a11"><h2>Part A · 1.1 Constructing noisy training inputs</h2>
+<p>Linear flow-matching path x<sub>t</sub> = (1−t)ε + t·x<sub>1</sub>, where t = 0 is pure noise and t = 1 is the clean image. One noise sample is reused at t = 0.25, 0.50 and 0.75.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-training-inputs.jpg" alt="Original image and the three noisy inputs." loading="lazy"><figcaption>Original image and the three noisy inputs.</figcaption></figure>
+</div>
+</section>
+<section id="a12"><h2>Part A · 1.2 Classical denoising</h2>
+<p>Each noisy input is rescaled by 1/t, then Gaussian-blurred. σ is swept over 1, 2, 4, 8, 16 and the result with the lowest MSE to the clean image is shown.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-blur-0.25.jpg" alt="t = 0.25" loading="lazy"><figcaption>t = 0.25</figcaption></figure>
+<figure class="wide"><img src="media/a-blur-0.5.jpg" alt="t = 0.5" loading="lazy"><figcaption>t = 0.5</figcaption></figure>
+<figure class="wide"><img src="media/a-blur-0.75.jpg" alt="t = 0.75" loading="lazy"><figcaption>t = 0.75</figcaption></figure>
+</div>
+</section>
+<section id="a13"><h2>Part A · 1.3 One-step denoising</h2>
+<p>One velocity prediction per input: x̂<sub>1</sub> = x<sub>t</sub> + (1−t)·v<sub>θ</sub>(x<sub>t</sub>, t, c), with the prompt “a high quality photo”.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-onestep-0.25.jpg" alt="t = 0.25" loading="lazy"><figcaption>t = 0.25</figcaption></figure>
+<figure class="wide"><img src="media/a-onestep-0.5.jpg" alt="t = 0.5" loading="lazy"><figcaption>t = 0.5</figcaption></figure>
+<figure class="wide"><img src="media/a-onestep-0.75.jpg" alt="t = 0.75" loading="lazy"><figcaption>t = 0.75</figcaption></figure>
+</div>
+</section>
+<section id="a14"><h2>Part A · 1.4 Visualizing velocity</h2>
+<p>What the model adds, (1−t)·v̂<sub>t</sub>, compared with the update x<sub>1</sub> − x<sub>t</sub> that would exactly recover the original.</p>
+<div class="grid">
+<figure class=""><img src="media/a-velocity-original.jpg" alt="Original image." loading="lazy"><figcaption>Original image.</figcaption></figure>
+<figure class="wide"><img src="media/a-velocity-0.25.jpg" alt="t = 0.25" loading="lazy"><figcaption>t = 0.25</figcaption></figure>
+<figure class="wide"><img src="media/a-velocity-0.50.jpg" alt="t = 0.50" loading="lazy"><figcaption>t = 0.50</figcaption></figure>
+<figure class="wide"><img src="media/a-velocity-0.75.jpg" alt="t = 0.75" loading="lazy"><figcaption>t = 0.75</figcaption></figure>
+</div>
+</section>
+<section id="a15"><h2>Part A · 1.5 Iterative denoising with Euler sampling</h2>
+<p>x<sub>t+h</sub> = x<sub>t</sub> + h·v(x<sub>t</sub>, t), recomputing the velocity at every step. Starting from the t = 0.50 input with h = 0.02 (25 updates).</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-trajectory.jpg" alt="Euler trajectory." loading="lazy"><figcaption>Euler trajectory.</figcaption></figure>
+<figure class="wide"><img src="media/a-comparison.jpg" alt="Iterative vs. one-step vs. classical denoising." loading="lazy"><figcaption>Iterative vs. one-step vs. classical denoising.</figcaption></figure>
+</div>
+</section>
+<section id="a16"><h2>Part A · 1.6 Generating images from noise</h2>
+<p>Five independent Gaussian initial states integrated from t = 0 to 1 with 50 Euler updates, prompt “a high quality photo”.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-samples.jpg" alt="Five samples." loading="lazy"><figcaption>Five samples.</figcaption></figure>
+</div>
+</section>
+<section id="a21"><h2>Part A · 2.1 Classifier-free guidance</h2>
+<p>v<sub>cfg</sub> = v<sub>c</sub> + w(v<sub>c</sub> − v<sub>u</sub>) with the empty prompt as the null condition, w = 7, h = 0.02, and the same initial noises as 1.6.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-cfg.jpg" alt="Five CFG samples (w = 7)." loading="lazy"><figcaption>Five CFG samples (w = 7).</figcaption></figure>
+</div>
+</section>
+<section id="a31"><h2>Part A · 3.1 Image-to-image editing</h2>
+<p>Start from (1−t<sub>start</sub>)ε + t<sub>start</sub>·x<sub>1</sub> and integrate to t = 1 with CFG (w = 7, h = 0.02, “a high quality photo”), for t<sub>start</sub> ∈ {0.02, 0.04, 0.06, 0.10, 0.14, 0.25, 0.50}.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-edit-campanile.jpg" alt="Campanile." loading="lazy"><figcaption>Campanile.</figcaption></figure>
+<figure class="wide"><img src="media/a-edit-claude_lane.jpg" alt="My image: Claude Lane." loading="lazy"><figcaption>My image: Claude Lane.</figcaption></figure>
+<figure class="wide"><img src="media/a-edit-fibroblasts.jpg" alt="My image: fibroblasts." loading="lazy"><figcaption>My image: fibroblasts.</figcaption></figure>
+<figure class="wide"><img src="media/a-edit-web_image.jpg" alt="Web image." loading="lazy"><figcaption>Web image.</figcaption></figure>
+<figure class="wide"><img src="media/a-edit-clock.jpg" alt="Hand-drawn: grandfather clock." loading="lazy"><figcaption>Hand-drawn: grandfather clock.</figcaption></figure>
+<figure class="wide"><img src="media/a-edit-landscape.jpg" alt="Hand-drawn: landscape." loading="lazy"><figcaption>Hand-drawn: landscape.</figcaption></figure>
+</div>
+</section>
+<section id="a32"><h2>Part A · 3.2 Text-guided image editing</h2>
+<p>Same seven starting times, with the generic prompt replaced by an edit prompt for each image.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-textedit-campanile.jpg" alt="Campanile." loading="lazy"><figcaption>Campanile.</figcaption></figure>
+<figure class="wide"><img src="media/a-textedit-claude_lane.jpg" alt="Claude Lane." loading="lazy"><figcaption>Claude Lane.</figcaption></figure>
+<figure class="wide"><img src="media/a-textedit-fibroblasts.jpg" alt="Fibroblasts." loading="lazy"><figcaption>Fibroblasts.</figcaption></figure>
+</div>
+</section>
+<section id="a33"><h2>Part A · 3.3 Visual anagrams</h2>
+<p>Average v<sub>cfg</sub>(x, t, c<sub>a</sub>) and F(v<sub>cfg</sub>(F(x), t, c<sub>b</sub>)), where F rotates the image by 180°, inside the same Euler sampler.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-anagram-0.jpg" alt="Illusion 1: upright and rotated." loading="lazy"><figcaption>Illusion 1: upright and rotated.</figcaption></figure>
+<figure class="wide"><img src="media/a-anagram-1.jpg" alt="Illusion 2: upright and rotated." loading="lazy"><figcaption>Illusion 2: upright and rotated.</figcaption></figure>
+</div>
+</section>
+<section id="a34"><h2>Part A · 3.4 Hybrid images</h2>
+<p>Each Euler update uses lowpass(v<sub>a</sub>) + v<sub>b</sub> − lowpass(v<sub>b</sub>): prompt a sets the distant structure, prompt b the close-up detail.</p>
+<div class="grid">
+<figure class="wide"><img src="media/a-hybrid-0.jpg" alt="Hybrid 1." loading="lazy"><figcaption>Hybrid 1.</figcaption></figure>
+<figure class="wide"><img src="media/a-hybrid-1.jpg" alt="Hybrid 2." loading="lazy"><figcaption>Hybrid 2.</figcaption></figure>
+</div>
+</section>
+<section id="b12"><h2>Part B · 1.2 Single-step denoising UNet</h2>
+<p>MNIST digits noised with z = x + σε for σ ∈ {0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0}.</p>
+<div class="grid">
+<figure class="wide"><img src="media/b-noisy.jpg" alt="Noising process." loading="lazy"><figcaption>Noising process.</figcaption></figure>
+</div>
+</section>
+<section id="b121"><h2>Part B · 1.2.1 Training</h2>
+<p>UNet denoiser trained on σ = 0.5 with an L2 loss.</p>
+<div class="grid">
+<figure class=""><img src="media/b-loss.jpg" alt="Training loss." loading="lazy"><figcaption>Training loss.</figcaption></figure>
+<figure class=""><img src="media/b-epoch1.jpg" alt="Test set, epoch 1." loading="lazy"><figcaption>Test set, epoch 1.</figcaption></figure>
+<figure class=""><img src="media/b-epoch5.jpg" alt="Test set, epoch 5." loading="lazy"><figcaption>Test set, epoch 5.</figcaption></figure>
+</div>
+</section>
+<section id="b122"><h2>Part B · 1.2.2 Out-of-distribution testing</h2>
+<p>The σ = 0.5 denoiser applied to test digits at other noise levels.</p>
+<div class="grid">
+<figure class=""><img src="media/b-ood-0.0.jpg" alt="σ = 0.0" loading="lazy"><figcaption>σ = 0.0</figcaption></figure>
+<figure class=""><img src="media/b-ood-0.2.jpg" alt="σ = 0.2" loading="lazy"><figcaption>σ = 0.2</figcaption></figure>
+<figure class=""><img src="media/b-ood-0.4.jpg" alt="σ = 0.4" loading="lazy"><figcaption>σ = 0.4</figcaption></figure>
+<figure class=""><img src="media/b-ood-0.5.jpg" alt="σ = 0.5" loading="lazy"><figcaption>σ = 0.5</figcaption></figure>
+<figure class=""><img src="media/b-ood-0.6.jpg" alt="σ = 0.6" loading="lazy"><figcaption>σ = 0.6</figcaption></figure>
+<figure class=""><img src="media/b-ood-0.8.jpg" alt="σ = 0.8" loading="lazy"><figcaption>σ = 0.8</figcaption></figure>
+<figure class=""><img src="media/b-ood-1.0.jpg" alt="σ = 1.0" loading="lazy"><figcaption>σ = 1.0</figcaption></figure>
+</div>
+</section>
+<section id="b123"><h2>Part B · 1.2.3 Denoising pure noise</h2>
+<p>A fresh UNet trained to map pure noise to digits.</p>
+<p>It appears that the exact same output is being generated for all the images because if the model is taking as an input a completely random image, there is absolutely no correlation with the label. Therefore, if we desire the model to not overfit, the model must generate an &quot;average digit&quot; which is the collection of pixels that gives the lowest expectation of the MSE loss.</p>
+<div class="grid">
+<figure class=""><img src="media/b-pure-loss.jpg" alt="Training loss." loading="lazy"><figcaption>Training loss.</figcaption></figure>
+<figure class=""><img src="media/b-pure-epoch1.jpg" alt="Epoch 1." loading="lazy"><figcaption>Epoch 1.</figcaption></figure>
+<figure class=""><img src="media/b-pure-epoch5.jpg" alt="Epoch 5." loading="lazy"><figcaption>Epoch 5.</figcaption></figure>
+</div>
+</section>
+<section id="b23"><h2>Part B · 2.1–2.3 Time-conditioned UNet (flow matching)</h2>
+<p>The UNet takes t as an extra input through fully-connected blocks and predicts the velocity x<sub>1</sub> − x<sub>0</sub>; samples come from Euler integration from noise at t = 0 to data at t = 1.</p>
+<div class="grid">
+<figure class=""><img src="media/b-time-loss.jpg" alt="Training loss." loading="lazy"><figcaption>Training loss.</figcaption></figure>
+<figure class=""><img src="media/b-time-epoch1.jpg" alt="Samples, epoch 1." loading="lazy"><figcaption>Samples, epoch 1.</figcaption></figure>
+<figure class=""><img src="media/b-time-epoch5.jpg" alt="Samples, epoch 5." loading="lazy"><figcaption>Samples, epoch 5.</figcaption></figure>
+<figure class=""><img src="media/b-time-epoch10.jpg" alt="Samples, epoch 10." loading="lazy"><figcaption>Samples, epoch 10.</figcaption></figure>
+</div>
+</section>
+<section id="b26"><h2>Part B · 2.4–2.6 Class-conditioned UNet (flow matching)</h2>
+<p>Adds a one-hot class vector (dropped 10% of the time) and samples with classifier-free guidance, v<sub>u</sub> + γ(v<sub>c</sub> − v<sub>u</sub>).</p>
+<div class="grid">
+<figure class=""><img src="media/b-class-epoch1.jpg" alt="Samples, epoch 1." loading="lazy"><figcaption>Samples, epoch 1.</figcaption></figure>
+</div>
+<div class="todo">PENDING: class-conditioned training loss curve, epoch 5 and 10 samples, and the no-scheduler run (training in progress).</div>
+</section>
+</main>
+</body>
+</html>
