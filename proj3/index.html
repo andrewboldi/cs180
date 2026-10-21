@@ -69,13 +69,13 @@ figcaption { font-size:14px; color:var(--muted); margin-top:4px; }
 <p>x<sub>t+h</sub> = x<sub>t</sub> + h·v(x<sub>t</sub>, t), recomputing the velocity at every step. Starting from the t = 0.50 input with h = 0.02 (25 updates).</p>
 <div class="grid">
 <figure class="wide"><img src="media/a-trajectory.jpg" alt="Euler trajectory." loading="lazy"><figcaption>Euler trajectory.</figcaption></figure>
-<figure class="wide"><img src="media/a-comparison.jpg" alt="Iterative vs. one-step vs. classical denoising." loading="lazy"><figcaption>Iterative vs. one-step vs. classical denoising.</figcaption></figure>
+<figure class="wide"><img src="media/a-comparison.jpg" alt="Iterative vs. one-step vs. classical denoising." loading="lazy"><figcaption>Iterative vs. one-step vs. classical denoising. Reconstruction MSE: Gaussian blur 0.0413, one-step 0.0139, Euler 0.0177.</figcaption></figure>
 </div>
 </section>
 <section id="a16"><h2>Part A · 1.6 Generating images from noise</h2>
 <p>Five independent Gaussian initial states integrated from t = 0 to 1 with 50 Euler updates, prompt “a high quality photo”.</p>
 <div class="grid">
-<figure class="wide"><img src="media/a-samples.jpg" alt="Five samples." loading="lazy"><figcaption>Five samples.</figcaption></figure>
+<figure class="wide"><img src="media/a-samples.jpg" alt="Five samples." loading="lazy"><figcaption>Five samples (base seed 180).</figcaption></figure>
 </div>
 </section>
 <section id="a21"><h2>Part A · 2.1 Classifier-free guidance</h2>
@@ -166,7 +166,7 @@ figcaption { font-size:14px; color:var(--muted); margin-top:4px; }
 <div class="grid">
 <figure class=""><img src="media/b-class-epoch1.jpg" alt="Samples, epoch 1." loading="lazy"><figcaption>Samples, epoch 1.</figcaption></figure>
 </div>
-<div class="todo">PENDING: class-conditioned training loss curve, epoch 5 and 10 samples, and the no-scheduler run (training in progress).</div>
+<div class="todo">Incomplete: the class-conditioned model is written in the notebook, but its full training did not finish before the deadline. Only epoch-1 samples are shown. The no-scheduler run stopped with a tensor shape error (size 10 vs. 64 at dimension 1).</div>
 </section>
 </main>
 </body>
