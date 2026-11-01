@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project 4A — Image Warping and Mosaicing</title>
+  <meta name="description" content="CS180 Project 4A — homographies from clicked correspondences, inverse warping with nearest-neighbor and bilinear interpolation, rectification, and blended photo mosaics.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3 5 15 8.5V23.5L3 27Z' fill='none' stroke='%237C5E31' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M29 5 17 8.5V23.5L29 27Z' fill='none' stroke='%239C7A46' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Italiana&amp;family=Jost:wght@300;400;500&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    document.documentElement.classList.add('js');
+    if (/[?&]pdf/.test(location.search)) {
+      document.documentElement.classList.add('no-anim', 'print-mode');
+    }
+    window.__animBooted = false;
+    setTimeout(function () {
+      if (!window.__animBooted) document.documentElement.classList.add('no-anim');
+    }, 4000);
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div id="loader" aria-hidden="true">
+    <svg class="iris" width="100%" height="100%">
+    <defs>
+      <mask id="iris-mask">
+        <rect width="100%" height="100%" fill="#fff"></rect>
+        <circle class="iris-hole" cx="50%" cy="50%" r="0" fill="#000"></circle>
+      </mask>
+    </defs>
+    <rect width="100%" height="100%" fill="#262015" mask="url(#iris-mask)"></rect></svg>
+    <div class="loader-mark">
+      <svg viewbox="0 0 64 64" class="loader-ring" aria-hidden="true">
+      <circle cx="32" cy="32" r="28" fill="none" stroke="#B08D57" stroke-width="1.5" pathlength="100"></circle>
+      <circle cx="32" cy="32" r="12" fill="none" stroke="#B08D57" stroke-width="1" pathlength="100"></circle></svg>
+      <p>CS180 · PROJECT 4A</p>
+    </div>
+  </div>
+  <header class="nav" id="nav">
+    <a class="nav-name" href="#top">Andrew&nbsp;Boldi</a>
+    <div class="nav-right">
+      <nav class="nav-links" aria-label="Sections">
+        <a class="nav-home" href="../">Index</a> <a href="#p1">A.1 <span class="nav-label">· Shoot</span></a> <a href="#p2">A.2 <span class="nav-label">· Homography</span></a> <a href="#p3">A.3 <span class="nav-label">· Warp</span></a> <a href="#p4">A.4 <span class="nav-label">· Mosaic</span></a>
+      </nav>
+    </div>
+  </header>
+  <div id="smooth-wrapper">
+    <div id="smooth-content">
+      <main id="top">
+        <p class="print-url" aria-hidden="true">https://andrewboldi.github.io/cs180/proj4a/</p>
+        <section class="hero">
+          <p class="eyebrow hero-eyebrow">CS180 · Intro to Computer Vision &amp; Computational Photography · Fall 2026</p>
+          <h1 class="hero-title"><span class="line-mask" data-speed="1.05"><span class="line">Image Warping</span></span> <span class="line-mask" data-speed="0.96"><span class="line">&amp; <em class="accent">Mosaicing</em></span></span></h1>
+          <p class="hero-sub" data-speed="0.985">Two photos taken from the same spot are related by a homography. Click matching points, solve for it by least squares, warp one photo into the other's frame by sampling backwards, and blend the two into one wider view.</p>
+          <p class="print-note">This page is interactive: two before/after sliders and a zoom viewer on every image. The live version is at https://andrewboldi.github.io/cs180/proj4a/</p>
+          <div class="exif-strip" aria-hidden="true">
+            <span>Proj&nbsp;04A</span><span>Points&nbsp;→&nbsp;H&nbsp;→&nbsp;mosaic</span><span>12&nbsp;pairs&nbsp;·&nbsp;2.1&nbsp;px</span><span>28&nbsp;mm&nbsp;eq.&nbsp;·&nbsp;f/1.8</span><span>Berkeley,&nbsp;CA</span>
+          </div>
+          <div class="scroll-cue">
+            <span>Scroll</span>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part A.1 ——————————————————————— -->
+        <section class="part" id="p1">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part A.1 · Shoot the pictures</p>
+            <h2 class="reveal">Turn, don't walk</h2>
+            <p class="lede reveal">Two photos are related by a homography exactly when the camera rotates about its center of projection without moving, or when everything in view lies on one plane. Any translation between the shots adds parallax, which no single 3 × 3 matrix can undo, so each set should be two heavily overlapping views taken from one spot. All photos are from the iPhone SE (3rd generation) main camera: 3.99 mm at f/1.8 (28 mm equivalent), 3024 × 4032 pixels once the EXIF rotation is applied.</p>
+          </header>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 1 · in0, in1</p>
+            <h3 class="reveal">Indoors</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/in0.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Indoor set, left view: tables, chairs, a blue screen and a ladder"></div>
+              <figcaption>Left view<span class="off">in0.jpg · 1/60 s · ISO 160</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/in1.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Indoor set, right view, turned toward the projector"></div>
+              <figcaption>Right view<span class="off">in1.jpg · 1/60 s · ISO 160</span></figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 2 · out0, out1</p>
+            <h3 class="reveal">Outdoors, at dusk</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/out0.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Outdoor set at dusk, left view: a forklift in front of buildings"></div>
+              <figcaption>Left view<span class="off">out0.jpg · 1/15 s · ISO 1250</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/out1.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Outdoor set at dusk, right view: the forklift, a truck and a lit building"></div>
+              <figcaption>Right view<span class="off">out1.jpg · 1/17 s · ISO 640</span></figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 3</p>
+            <h3 class="reveal">Not shot yet</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="missing-wrap">
+              <div class="missing portrait">Set 3 · left view</div>
+              <figcaption>Left view<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing portrait">Set 3 · right view</div>
+              <figcaption>Right view<span class="off">missing</span></figcaption>
+            </figure>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part A.1</p>
+            <ul>
+              <li>A third set of photos, since A.4 needs three mosaics.</li>
+              <li>A sentence or two on how you shot each set (tripod or handheld, how you kept the phone turning in place).</li>
+              <li>Set 2: the forklift is a few feet from the lens, so any sideways movement between the shots shows up as parallax against the buildings, and the exposure changed between the frames (1/15 s at ISO 1250, then 1/17 s at ISO 640). Click points only on the distant buildings, or reshoot with exposure locked.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part A.2 ——————————————————————— -->
+        <section class="part" id="p2">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part A.2 · Recover homographies</p>
+            <h2 class="reveal">Twenty-four equations, eight unknowns</h2>
+            <p class="lede reveal">A homography sends a point (x, y) in one image to (x′, y′) in the other through a 3 × 3 matrix acting on homogeneous coordinates. H is only defined up to scale, so we fix its bottom-right entry to 1 and solve for the other eight. Each clicked pair gives two equations that are linear in those eight unknowns. Four pairs pin H down exactly, but a few pixels of clicking error would then swing it a lot, so we click more and solve the overdetermined system by least squares with <span class="mono-inline">np.linalg.lstsq</span>.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Projective map</h3><span class="math" data-tex="\begin{bmatrix} w x' \\ w y' \\ w \end{bmatrix} = \begin{bmatrix} a & b & c \\ d & e & f \\ g & h & 1 \end{bmatrix} \begin{bmatrix} x \\ y \\ 1 \end{bmatrix}">[wx′, wy′, w]ᵀ = H [x, y, 1]ᵀ</span>
+              <p>Dividing by w = gx + hy + 1 gives x′ = (ax + by + c) / (gx + hy + 1), and the same for y′ with d, e and f. Multiplying through by the denominator leaves equations that are linear in a through h.</p>
+            </div>
+            <div class="formula">
+              <h3>Two rows per correspondence</h3><span class="math" data-tex="\begin{bmatrix} x & y & 1 & 0 & 0 & 0 & -x x' & -y x' \\ 0 & 0 & 0 & x & y & 1 & -x y' & -y y' \end{bmatrix} \begin{bmatrix} a \\ \vdots \\ h \end{bmatrix} = \begin{bmatrix} x' \\ y' \end{bmatrix}">[x y 1 0 0 0 −xx′ −yx′; 0 0 0 x y 1 −xy′ −yy′] h = [x′; y′]</span>
+              <p>Stacking n pairs gives a 2n × 8 system A h = b, and least squares picks the h that minimizes ‖A h − b‖². With the 12 pairs below, A is 24 × 8.</p>
+            </div>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 1 · 12 pairs</p>
+            <h3 class="reveal">The correspondences</h3>
+            <p class="reveal">Clicked with the course's correspondence tool, which exports pairs in order and numbers them from 0. Point i on the left matches point i on the right. The red cross is a thirteenth pair that was dropped (see below).</p>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/in0_pts.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Left view with twelve numbered correspondence points and one crossed-out point on the ceiling"></div>
+              <figcaption>im1 · in0<span class="off">12 points + dropped pair 12</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/in1_pts.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Right view with the matching twelve numbered points and the crossed-out point on the ceiling"></div>
+              <figcaption>im2 · in1<span class="off">12 points + dropped pair 12</span></figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 1 · in0 → in1</p>
+            <h3 class="reveal">The system, and the H it gives</h3>
+          </div>
+          <div class="formulas reveal">
+            <div class="formula wide">
+              <h3>A h = b · first two of twelve pairs</h3><span class="math" data-tex="\underbrace{\begin{bmatrix} 2453 & 2539 & 1 & 0 & 0 & 0 & -3\,127\,575 & -3\,237\,225 \\ 0 & 0 & 0 & 2453 & 2539 & 1 & -6\,318\,928 & -6\,540\,464 \\ 1422 & 1870 & 1 & 0 & 0 & 0 & -298\,620 & -392\,700 \\ 0 & 0 & 0 & 1422 & 1870 & 1 & -2\,717\,442 & -3\,573\,570 \\ \vdots & & & & & & & \vdots \end{bmatrix}}_{A \;(24 \times 8)} \begin{bmatrix} a \\ b \\ c \\ d \\ e \\ f \\ g \\ h \end{bmatrix} = \underbrace{\begin{bmatrix} 1275 \\ 2576 \\ 210 \\ 1911 \\ \vdots \end{bmatrix}}_{b \;(24)}">A h = b with rows [2453 2539 1 0 0 0 −3127575 −3237225], [0 0 0 2453 2539 1 −6318928 −6540464], [1422 1870 1 0 0 0 −298620 −392700], [0 0 0 1422 1870 1 −2717442 −3573570], … and b = [1275, 2576, 210, 1911, …]</span>
+              <p>Pair 0 is (2453, 2539) ↔ (1275, 2576), and pair 1 is (1422, 1870) ↔ (210, 1911), in pixels of the full-resolution photos.</p>
+            </div>
+            <div class="formula wide">
+              <h3>Recovered homography · in0 → in1</h3><span class="math" data-tex="H = \begin{bmatrix} 1.392 & -0.01654 & -1699 \\ 0.2765 & 1.255 & -486.9 \\ 1.318 \times 10^{-4} & -4.619 \times 10^{-6} & 1 \end{bmatrix}">H = [1.392 −0.01654 −1699; 0.2765 1.255 −486.9; 1.318e−4 −4.619e−6 1]</span>
+              <p>Sending the 12 left-image points through H lands them within 0.4 to 3.6 px of their right-image partners (mean 2.1 px).</p>
+            </div>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">One bad click</p>
+            <p>The first overlay ghosted everywhere. Refitting H with one pair left out at a time found the cause: without pair 12, the other twelve agree to within 3.6 px, but with it every residual was between 72 and 274 px. Pair 12 is on the ceiling, where the grid of tiles repeats, and its right-image click landed on a different intersection, about 530 px from where the other pairs put it. Least squares has no way to ignore one bad equation, so a single wrong click bent the whole homography. The slider compares the overlay with all 13 pairs (left) and with pair 12 dropped (right).</p>
+          </div>
+          <div class="compare narrow reveal" id="cmp-click" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <img src="media/overlay_after_crop.jpg" width="1400" height="1145" loading="lazy" decoding="async" alt="50/50 overlay with pair 12 dropped: the two photos line up">
+            <div class="top"><img src="media/overlay_before_crop.jpg" width="1400" height="1145" loading="lazy" decoding="async" alt="50/50 overlay with all 13 pairs: doubled screen, ladder and chairs"></div>
+            <div class="handle"></div><span class="tag a">All 13 pairs</span> <span class="tag b">Pair 12 dropped</span>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part A.2</p>
+            <ul>
+              <li>Correspondences (and the H they give) for set 2 and set 3. <span class="mono-inline">uv run pytest</span> checks every exported <span class="mono-inline">.json</span> in <span class="mono-inline">assets/</span> and names any pair the others disagree with.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part A.3 ——————————————————————— -->
+        <section class="part" id="p3">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part A.3 · Warp the images</p>
+            <h2 class="reveal">Sampling backwards</h2>
+            <p class="lede reveal">Pushing every source pixel forward through H would leave holes wherever the warp stretches the image. So we warp backwards: send the four corners through H to find the output's bounding box, then for every pixel in that box ask H<sup>−1</sup> where it came from, and sample the source there. That location almost never lands exactly on a pixel, and the two interpolation methods differ in what they do about it. Nearest neighbor rounds it to the closest pixel. Bilinear blends the four pixels around it, weighting each by how close it is.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Inverse warping</h3><span class="math" data-tex="\begin{bmatrix} w\,x_s \\ w\,y_s \\ w \end{bmatrix} = H^{-1} \begin{bmatrix} x \\ y \\ 1 \end{bmatrix}, \qquad x_{\min} \le x \le x_{\max},\;\; y_{\min} \le y \le y_{\max}">[w·xₛ, w·yₛ, w]ᵀ = H⁻¹ [x, y, 1]ᵀ</span>
+              <p>The bounding box comes from the four corners sent through H. Integer coordinates are pixel centers, and an output pixel whose source (x<sub>s</sub>, y<sub>s</sub>) falls outside the photo stays empty.</p>
+            </div>
+            <div class="formula">
+              <h3>Bilinear interpolation</h3><span class="math" data-tex="I(x_s, y_s) = (1-\alpha)(1-\beta)\, I_{00} + \alpha(1-\beta)\, I_{10} + (1-\alpha)\,\beta\, I_{01} + \alpha\beta\, I_{11}">I(xₛ, yₛ) = (1−α)(1−β) I₀₀ + α(1−β) I₁₀ + (1−α)β I₀₁ + αβ I₁₁</span>
+              <p>Here α = x<sub>s</sub> − ⌊x<sub>s</sub>⌋ and β = y<sub>s</sub> − ⌊y<sub>s</sub>⌋, and I<sub>ij</sub> is the source pixel at (⌊x<sub>s</sub>⌋ + i, ⌊y<sub>s</sub>⌋ + j). Nearest neighbor instead takes the single pixel at (round(x<sub>s</sub>), round(y<sub>s</sub>)).</p>
+            </div>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">in0 warped into in1's frame</p>
+            <h3 class="reveal">Nearest neighbor vs. bilinear</h3>
+            <p class="reveal">Both warps use the homography from A.2 on the full 3024 × 4032 photo and produce a 3595 × 5148 output. Timed with <span class="mono-inline">time.perf_counter</span>, nearest neighbor takes 1.5 s and bilinear 3.4 s.</p>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/warp_nn.jpg" width="1117" height="1600" loading="lazy" decoding="async" alt="The left view warped into the right view's frame with nearest-neighbor sampling"></div>
+              <figcaption>Nearest neighbor<span class="off">1.5 s</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/warp_bil.jpg" width="1117" height="1600" loading="lazy" decoding="async" alt="The left view warped into the right view's frame with bilinear sampling"></div>
+              <figcaption>Bilinear<span class="off">3.4 s</span></figcaption>
+            </figure>
+          </div>
+          <div class="compare narrow reveal" id="cmp-interp" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <img src="media/warp_bil_crop.jpg" width="1100" height="1100" loading="lazy" decoding="async" alt="Close-up of a chrome chair leg, bilinear: smooth edges">
+            <div class="top"><img src="media/warp_nn_crop.jpg" width="1100" height="1100" loading="lazy" decoding="async" alt="Close-up of a chrome chair leg, nearest neighbor: stair-stepped edges"></div>
+            <div class="handle"></div><span class="tag a">Nearest neighbor</span> <span class="tag b">Bilinear</span>
+          </div>
+          <p class="footnote">A 220 × 220 px patch of each output around a chrome chair leg at the lower left, where the warp stretches the photo (about 1.7× in area here), enlarged 5× with square pixels.</p>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part A.3 · comparison</p>
+            <ul>
+              <li>Your comparison of the two methods: what you see in the close-up, and the trade-off between speed and quality (times above).</li>
+            </ul>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Testing H on one photo</p>
+            <h3 class="reveal">Rectification</h3>
+            <p class="reveal">Click the four corners of something known to be rectangular, pair them with the corners of a rectangle of the right proportions, and warp. If the object comes out rectangular, computeH and the warps are working before we rely on them for a mosaic.</p>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="missing-wrap">
+              <div class="missing portrait">Rectification 1 · input with its 4 corners</div>
+              <figcaption>Input<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing portrait">Rectification 1 · rectified</div>
+              <figcaption>Rectified<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing portrait">Rectification 2 · input with its 4 corners</div>
+              <figcaption>Input<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing portrait">Rectification 2 · rectified</div>
+              <figcaption>Rectified<span class="off">missing</span></figcaption>
+            </figure>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part A.3 · rectification</p>
+            <ul>
+              <li>At least two rectified images. Candidates already in your photos: the blue screen in in0/in1, or a ceiling tile. A poster, painting, door or floor tile works too.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part A.4 ——————————————————————— -->
+        <section class="part" id="p4">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part A.4 · Blend the images into a mosaic</p>
+            <h2 class="reveal">Two views, one plane</h2>
+            <p class="lede reveal">in1 stays where it is and in0 is warped into its projection with the homography from A.2. Both go onto one canvas big enough to hold them, shifted by the warped image's top-left corner (x<sub>min</sub>, y<sub>min</sub>) = (−1799, −487), since in0 lands to the left of and above in1.</p>
+          </header>
+          <figure class="frame frame-wide">
+            <div class="frame-mask"><img src="media/overlay.jpg" width="1499" height="1600" loading="lazy" decoding="async" alt="The warped left view and the right view averaged 50/50 on one canvas: aligned, with half-bright edges"></div>
+            <figcaption>Registration check<span class="off">50 / 50 average · set 1</span></figcaption>
+          </figure>
+          <div class="notes reveal">
+            <p class="notes-label">Not a mosaic yet</p>
+            <p>This is an even 50/50 average of the two layers. It shows that the registration is right, but it isn't a blend: wherever only one photo has pixels it shows at half brightness, and the edges of each photo are hard seams.</p>
+          </div>
+          <div class="result-grid">
+            <figure class="missing-wrap">
+              <div class="missing">Mosaic 1 · set 1</div>
+              <figcaption>Mosaic 1<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing">Mosaic 2 · set 2</div>
+              <figcaption>Mosaic 2<span class="off">missing</span></figcaption>
+            </figure>
+            <figure class="missing-wrap">
+              <div class="missing">Mosaic 3 · set 3</div>
+              <figcaption>Mosaic 3<span class="off">missing</span></figcaption>
+            </figure>
+          </div>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Part A.4</p>
+            <ul>
+              <li>An alpha mask for each warped photo, and weighted averaging (feathering) or a 2-level Laplacian pyramid in place of the 50/50 average, so the parts only one photo covers keep full brightness and the seams disappear.</li>
+              <li>Three mosaics, each shown with its source images.</li>
+              <li>An explanation of your blending procedure.</li>
+              <li>Optional for CS180 (A.5, bells and whistles): a cylindrical or spherical projection.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Takeaway ——————————————————————— -->
+        <section class="part" id="learned">
+          <header class="part-head">
+            <p class="eyebrow reveal">Takeaway</p>
+            <h2 class="reveal">What I learned</h2>
+          </header>
+          <div class="todo reveal">
+            <p class="todo-label">TODO · Takeaway</p>
+            <p>A few sentences on what you learned in this part.</p>
+          </div>
+        </section>
+
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <span>shoot · click · solve · warp · resample · feather · mosaic&nbsp;·&nbsp;</span> <span>shoot · click · solve · warp · resample · feather · mosaic&nbsp;·&nbsp;</span>
+          </div>
+        </div>
+        <footer class="colophon">
+          <p class="colophon-title reveal">One center, many views.</p>
+          <div class="colophon-meta reveal">
+            <p>Andrew Boldi — CS180: Intro to Computer Vision &amp; Computational Photography<br>
+            UC Berkeley · Fall 2026</p>
+            <p class="colophon-links"><a href="https://cal-cs180.github.io/fa26/hw/proj3/partA.html">Assignment ↗</a> <span aria-hidden="true">·</span> <a href="../">All projects ↗</a></p>
+            <p class="colophon-fine">Built with Three.js + GSAP · drag the sliders · click any image to zoom</p>
+          </div>
+        </footer>
+      </main>
+    </div>
+  </div>
+  <div class="lightbox" id="lightbox" hidden="">
+    <div class="lb-backdrop" data-close=""></div>
+    <div class="lb-stage" id="lb-stage"><img id="lb-img" src="" alt="Enlarged view"></div>
+    <header class="lb-bar">
+      <span class="lb-title" id="lb-title"></span> <span class="lb-off" id="lb-off"></span>
+      <div class="lb-toggle" id="lb-toggle" hidden="">
+        <button type="button" data-view="before">Before</button> <button type="button" data-view="after" class="on">After</button>
+      </div>
+      <div class="lb-zoom">
+        <button type="button" id="lb-zoom-out" aria-label="Zoom out">−</button> <button type="button" id="lb-zoom-reset">100%</button> <button type="button" id="lb-zoom-in" aria-label="Zoom in">+</button>
+      </div><button type="button" class="lb-close" id="lb-close" aria-label="Close">✕</button>
+    </header>
+  </div>
+  <script>
+    if (document.documentElement.classList.contains('print-mode')) {
+      document.querySelectorAll('img[loading="lazy"]').forEach(function (img) { img.loading = 'eager'; });
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollSmoother.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
