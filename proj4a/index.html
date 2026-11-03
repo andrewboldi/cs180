@@ -102,27 +102,9 @@
               <figcaption>Right view<span class="off">out1.jpg · 1/17 s · ISO 640</span></figcaption>
             </figure>
           </div>
-          <div class="sub-head">
-            <p class="eyebrow reveal">Set 3</p>
-            <h3 class="reveal">Not shot yet</h3>
-          </div>
-          <div class="result-grid two narrow">
-            <figure class="missing-wrap">
-              <div class="missing portrait">Set 3 · left view</div>
-              <figcaption>Left view<span class="off">missing</span></figcaption>
-            </figure>
-            <figure class="missing-wrap">
-              <div class="missing portrait">Set 3 · right view</div>
-              <figcaption>Right view<span class="off">missing</span></figcaption>
-            </figure>
-          </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part A.1</p>
-            <ul>
-              <li>A third set of photos, since A.4 needs three mosaics.</li>
-              <li>A sentence or two on how you shot each set (tripod or handheld, how you kept the phone turning in place).</li>
-              <li>Set 2: the forklift is a few feet from the lens, so any sideways movement between the shots shows up as parallax against the buildings, and the exposure changed between the frames (1/15 s at ISO 1250, then 1/17 s at ISO 640). Click points only on the distant buildings, or reshoot with exposure locked.</li>
-            </ul>
+          <div class="notes reveal">
+            <p class="notes-label">What makes set 2 harder</p>
+            <p>The forklift is only a few feet from the lens, so any sideways movement of the phone between the two shots shows up as parallax between it and the buildings behind. The exposure also changed between the frames (1/15 s at ISO 1250, then 1/17 s at ISO 640), so the two photos don't have the same brightness where they overlap. I didn't get a third set shot in time, so this submission has two mosaics instead of three.</p>
           </div>
         </section>
 
@@ -181,11 +163,26 @@
             <div class="top"><img src="media/overlay_before_crop.jpg" width="1400" height="1145" loading="lazy" decoding="async" alt="50/50 overlay with all 13 pairs: doubled screen, ladder and chairs"></div>
             <div class="handle"></div><span class="tag a">All 13 pairs</span> <span class="tag b">Pair 12 dropped</span>
           </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part A.2</p>
-            <ul>
-              <li>Correspondences (and the H they give) for set 2 and set 3. <span class="mono-inline">uv run pytest</span> checks every exported <span class="mono-inline">.json</span> in <span class="mono-inline">assets/</span> and names any pair the others disagree with.</li>
-            </ul>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Set 2 · 21 pairs</p>
+            <h3 class="reveal">Correspondences for the outdoor set</h3>
+            <p class="reveal">These points were not clicked by hand. I matched SIFT features between the two photos with OpenCV, then ran RANSAC several times in a row, removing each model's inliers before the next run, to separate the groups of matches that agree with different homographies. The largest group that covers both the forklift and the windows of the building behind it gave the cleanest overlay, and I kept one inlier from each cell of a coarse grid so the 21 pairs spread across the overlap. H itself is still computed by my own least-squares <span class="mono-inline">computeH</span> from those 21 pairs.</p>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/out0_pts.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Outdoor left view with 21 numbered correspondence points on the forklift and the building"></div>
+              <figcaption>im1 · out0<span class="off">21 points</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/out1_pts.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Outdoor right view with the matching 21 numbered points"></div>
+              <figcaption>im2 · out1<span class="off">21 points</span></figcaption>
+            </figure>
+          </div>
+          <div class="formulas reveal">
+            <div class="formula wide">
+              <h3>Recovered homography · out0 → out1</h3><span class="math" data-tex="H = \begin{bmatrix} 1.866 & -0.01852 & -3420 \\ 0.5107 & 1.727 & -1622 \\ 2.657 \times 10^{-4} & 2.093 \times 10^{-5} & 1 \end{bmatrix}">H = [1.866 −0.01852 −3420; 0.5107 1.727 −1622; 2.657e−4 2.093e−5 1]</span>
+              <p>The 21 out0 points land within 3.4 px of their out1 partners after going through H (mean 1.7 px). <span class="mono-inline">uv run pytest</span> also checks every exported <span class="mono-inline">.json</span> by refitting H with one pair left out at a time, so a bad pair like the ceiling click above gets named.</p>
+            </div>
           </div>
         </section>
 
@@ -227,11 +224,9 @@
             <div class="handle"></div><span class="tag a">Nearest neighbor</span> <span class="tag b">Bilinear</span>
           </div>
           <p class="footnote">A 220 × 220 px patch of each output around a chrome chair leg at the lower left, where the warp stretches the photo (about 1.7× in area here), enlarged 5× with square pixels.</p>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part A.3 · comparison</p>
-            <ul>
-              <li>Your comparison of the two methods: what you see in the close-up, and the trade-off between speed and quality (times above).</li>
-            </ul>
+          <div class="notes reveal">
+            <p class="notes-label">Speed vs. quality</p>
+            <p>In the close-up, nearest neighbor turns the edges of the chrome leg into stair steps, because every output pixel copies one whole source pixel and neighboring output pixels often copy the same one. Bilinear gives smooth edges and smooth highlights, at the cost of being a little softer. Bilinear reads four source pixels instead of one and does the weighting arithmetic, and it took about 2.3 times as long (3.4 s vs. 1.5 s). At the size these photos are shown on a page the difference is hard to see. It only shows up when you zoom in where the warp stretches the image, which is why the mosaics below use nearest neighbor.</p>
           </div>
           <div class="sub-head">
             <p class="eyebrow reveal">Testing H on one photo</p>
@@ -239,28 +234,26 @@
             <p class="reveal">Click the four corners of something known to be rectangular, pair them with the corners of a rectangle of the right proportions, and warp. If the object comes out rectangular, computeH and the warps are working before we rely on them for a mosaic.</p>
           </div>
           <div class="result-grid two narrow">
-            <figure class="missing-wrap">
-              <div class="missing portrait">Rectification 1 · input with its 4 corners</div>
-              <figcaption>Input<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/rect_in0_in.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Indoor left view with the four corners of the blue screen outlined"></div>
+              <figcaption>Screen · input<span class="off">in0 · 4 corners</span></figcaption>
             </figure>
-            <figure class="missing-wrap">
-              <div class="missing portrait">Rectification 1 · rectified</div>
-              <figcaption>Rectified<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/rect_in0.jpg" width="1600" height="1577" loading="lazy" decoding="async" alt="The screen rectified to a 16:9 rectangle, seen straight on"></div>
+              <figcaption>Screen · rectified<span class="off">16 : 9 · bilinear</span></figcaption>
             </figure>
-            <figure class="missing-wrap">
-              <div class="missing portrait">Rectification 2 · input with its 4 corners</div>
-              <figcaption>Input<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/rect_out1_in.jpg" width="1200" height="1600" loading="lazy" decoding="async" alt="Outdoor right view with the four corners of a lit window outlined"></div>
+              <figcaption>Window · input<span class="off">out1 · 4 corners</span></figcaption>
             </figure>
-            <figure class="missing-wrap">
-              <div class="missing portrait">Rectification 2 · rectified</div>
-              <figcaption>Rectified<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/rect_out1.jpg" width="842" height="919" loading="lazy" decoding="async" alt="The window rectified: its sides are vertical and parallel and the wall around it is seen straight on"></div>
+              <figcaption>Window · rectified<span class="off">150 × 290 · bilinear</span></figcaption>
             </figure>
           </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part A.3 · rectification</p>
-            <ul>
-              <li>At least two rectified images. Candidates already in your photos: the blue screen in in0/in1, or a ceiling tile. A poster, painting, door or floor tile works too.</li>
-            </ul>
+          <div class="notes reveal">
+            <p class="notes-label">How the rectifications were made</p>
+            <p>The screen is a 16:9 display, so its corners go to a 16:9 rectangle. Its bottom-left corner is hidden behind a chair, so I extended the screen's left and bottom edges until they met. The window is a 2 × 3 grid of panes, and I mapped it to 150 × 290, close to its measured size in the photo, because I don't know its real proportions. In both cases the rectangle sits where the object already is, at about its current width, so the output stays near the input's scale. Warping the whole photo didn't work: the side of the image far from the object gets sent toward the line at infinity, and the output would have been around 10 000 × 14 000 pixels. So the photo is cropped to the object plus a margin first. Afterwards the screen's edges are horizontal and vertical, and the window's sides, which lean in because the phone was tilted up at the building, come out parallel. Rectangles staying rectangles is also a good check that <span class="mono-inline">computeH</span> and the warps work, before trusting them with a mosaic.</p>
           </div>
         </section>
 
@@ -279,28 +272,43 @@
             <p class="notes-label">Not a mosaic yet</p>
             <p>This is an even 50/50 average of the two layers. It shows that the registration is right, but it isn't a blend: wherever only one photo has pixels it shows at half brightness, and the edges of each photo are hard seams.</p>
           </div>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Feather weight</h3><span class="math" data-tex="w(x, y) = \frac{\min(x,\; W-1-x,\; y,\; H-1-y)}{\max_{x,y} \min(x,\; W-1-x,\; y,\; H-1-y)}">w(x, y) = min(x, W−1−x, y, H−1−y) / max</span>
+              <p>Each source photo gets a weight that is 0 on its border and rises linearly to 1 at its center. It is the distance to the nearest edge, normalized.</p>
+            </div>
+            <div class="formula">
+              <h3>Weighted average</h3><span class="math" data-tex="I(x, y) = \frac{\sum_i w_i(x, y)\, I_i(x, y)}{\sum_i w_i(x, y)}">I = Σ wᵢ Iᵢ / Σ wᵢ</span>
+              <p>The weight rides along as a fourth channel, so the warp carries it into the mosaic's frame with no extra work. Where only one photo covers a pixel, this returns that photo unchanged.</p>
+            </div>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Blending procedure</p>
+            <p>Before warping, I multiply each photo's colors by its feather weight and stack the weight on as a fourth channel, [w·B, w·G, w·R, w]. in0 goes through the inverse warp and in1 through the identity. Both are pasted into zero-filled canvases of the same size, and the canvases are added. Dividing the three color channels by the summed weight (plus 10<sup>−8</sup>, so empty canvas stays black instead of becoming 0/0) gives the weighted average. Since each photo fades out toward its own edges, the overlap crossfades smoothly from one photo to the other instead of switching at a seam. That also hides most of the brightness difference between the two exposures in set 2. My first attempt divided by the summed weight without multiplying the colors by it first, and every pixel came out black or blown out. The slider shows the 50/50 average (left) against the feathered blend (right) on the same window of set 1.</p>
+          </div>
+          <div class="compare narrow reveal" id="cmp-blend" style="margin-top: clamp(2.5rem, 6vh, 4rem);">
+            <img src="media/blend_feather_crop.jpg" width="1400" height="1145" loading="lazy" decoding="async" alt="Feathered blend: even brightness and no seam at the edge of the right photo">
+            <div class="top"><img src="media/blend_avg_crop.jpg" width="1400" height="1145" loading="lazy" decoding="async" alt="50/50 average: the part covered by only one photo is half as bright, with a hard seam"></div>
+            <div class="handle"></div><span class="tag a">50 / 50 average</span> <span class="tag b">Feathered</span>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Results</p>
+            <h3 class="reveal">The mosaics</h3>
+            <p class="reveal">Each mosaic warps the left photo into the right photo's frame. The source photos are shown in A.1.</p>
+          </div>
           <div class="result-grid">
-            <figure class="missing-wrap">
-              <div class="missing">Mosaic 1 · set 1</div>
-              <figcaption>Mosaic 1<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mosaic_in0.jpg" width="1499" height="1600" loading="lazy" decoding="async" alt="Mosaic of the indoor set: the classroom from the left wall to the projector, with no visible seam"></div>
+              <figcaption>Mosaic 1<span class="off">set 1 · in0 + in1</span></figcaption>
             </figure>
-            <figure class="missing-wrap">
-              <div class="missing">Mosaic 2 · set 2</div>
-              <figcaption>Mosaic 2<span class="off">missing</span></figcaption>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/mosaic_out0.jpg" width="1574" height="1600" loading="lazy" decoding="async" alt="Mosaic of the outdoor set: the forklift, the lot and the lit building at dusk"></div>
+              <figcaption>Mosaic 2<span class="off">set 2 · out0 + out1</span></figcaption>
             </figure>
             <figure class="missing-wrap">
               <div class="missing">Mosaic 3 · set 3</div>
-              <figcaption>Mosaic 3<span class="off">missing</span></figcaption>
+              <figcaption>Mosaic 3<span class="off">not shot</span></figcaption>
             </figure>
-          </div>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Part A.4</p>
-            <ul>
-              <li>An alpha mask for each warped photo, and weighted averaging (feathering) or a 2-level Laplacian pyramid in place of the 50/50 average, so the parts only one photo covers keep full brightness and the seams disappear.</li>
-              <li>Three mosaics, each shown with its source images.</li>
-              <li>An explanation of your blending procedure.</li>
-              <li>Optional for CS180 (A.5, bells and whistles): a cylindrical or spherical projection.</li>
-            </ul>
           </div>
         </section>
 
@@ -310,9 +318,8 @@
             <p class="eyebrow reveal">Takeaway</p>
             <h2 class="reveal">What I learned</h2>
           </header>
-          <div class="todo reveal">
-            <p class="todo-label">TODO · Takeaway</p>
-            <p>A few sentences on what you learned in this part.</p>
+          <div class="notes reveal">
+            <p>Least squares trusts every equation equally. One click on the wrong ceiling-tile corner bent the whole homography, and the fix wasn't more points but finding the bad one, by refitting without each pair in turn. Turning that check into a test meant later correspondence files got checked automatically. Blending was harder than the math made it look. A weighted average is only right if the colors are multiplied by their weights before they're summed. And keeping the weight as a fourth channel that the warp carries along got rid of a lot of offset bookkeeping. The outdoor set also showed how much a homography assumes: anything close to the camera, like the forklift, only lines up if the phone turns without moving.</p>
           </div>
         </section>
 
