@@ -374,7 +374,7 @@
           <div class="formulas reveal">
             <div class="formula">
               <h3>Ratio test</h3><span class="math" data-tex="\frac{e_{1\text{-NN}}}{e_{2\text{-NN}}} &lt; 0.4">e₁ₙₙ / e₂ₙₙ &lt; 0.4</span>
-              <p>In Figure 6b of the paper, correct matches mostly have a ratio below about 0.4, while incorrect ones spread from there up to 1. A feature with two near-equal candidates, like one ceiling-tile corner among many identical ones, is ambiguous, and the ratio test throws it out.</p>
+              <p>In Figure 6b of the paper, the ratio for correct matches peaks near 0.1, while incorrect matches almost never fall below about 0.4 and pile up above 0.6. A threshold of 0.4 keeps the bulk of the correct matches and almost none of the wrong ones. A feature with two near-equal candidates, like one ceiling-tile corner among many identical ones, is ambiguous, and the ratio test throws it out.</p>
             </div>
           </div>
           <figure class="frame frame-wide">
@@ -387,7 +387,7 @@
           </figure>
           <div class="notes reveal">
             <p class="notes-label">What gets through</p>
-            <p>The ratio test removes most bad matches but not all of them. In set 1 the remaining outliers are mostly on the ceiling, where the tile grid and the identical lights repeat. Set 2 has half as many matches and half of those are wrong: it's darker, the two exposures differ, and the forklift is close enough to the camera that it moves against the building behind it (parallax), so its matches don't agree with the same homography as the background's.</p>
+            <p>The ratio test removes most bad matches but not all of them. In set 1 the remaining outliers are mostly on the ceiling, where the tile grid and the identical lights repeat. Set 2 has half as many matches, and about half of those are wrong. Almost all of the wrong ones are in the dark background seen through the forklift's cab, around the white van, where the photos are noisy and many patches look alike. Almost all of the inliers are on the forklift itself, plus two windows of the building.</p>
           </div>
         </section>
 
@@ -446,7 +446,7 @@
           </div>
           <div class="notes reveal">
             <p class="notes-label">How they compare</p>
-            <p>The automatic and manual mosaics are hard to tell apart. To put a number on it, I sent the Part A points of each left photo through both homographies (in the 1200 px frame). For set 2 the two H's agree to within 0.97 px on average (2.5 px at most). For set 1 they differ by 4.1 px on average and 12.9 px at the far edge of the overlap. The automatic H is fit to 111 points, many of them on the carpet, while the manual one rests on 12 clicks, mostly on the wall and furniture, so each is a little better at the region its points came from. Neither shows ghosting at the scale of the page. In set 2 the automatic H aligns the building and the forklift as well as the Part A points did, without anyone choosing which plane to follow: RANSAC simply picks the homography that the most matches agree with. Part B's third mosaic needs a third set of photos, which I haven't shot yet.</p>
+            <p>The automatic and manual mosaics are hard to tell apart. To put a number on it, I sent the Part A points of each left photo through both homographies (in the 1200 px frame). For set 2 the two H's agree to within 0.97 px on average (2.5 px at most). For set 1 they differ by 4.1 px on average and 12.9 px at the far edge of the overlap. The automatic H is fit to 111 points, many of them on the carpet, while the manual one rests on 12 clicks, mostly on the wall and furniture, and each fits its own points better. On the 12 clicked pairs, the manual H's mean error is 0.63 px and the automatic H's is 4.11 px. On the 111 RANSAC inliers it's the other way around: 0.90 px for the automatic H and 2.47 px for the manual one. Neither mosaic shows ghosting at the scale of the page. In set 2, even though nearly all the inliers are on the forklift, the building behind it lines up too, so the phone turned with little parallax between them. Part B's third mosaic needs a third set of photos, which I haven't shot yet.</p>
           </div>
         </section>
 
