@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Project 4A — Image Warping and Mosaicing</title>
-  <meta name="description" content="CS180 Project 4A — homographies from clicked correspondences, inverse warping with nearest-neighbor and bilinear interpolation, rectification, and blended photo mosaics.">
+  <title>Project 4 — Image Warping and Mosaicing</title>
+  <meta name="description" content="CS180 Project 4 — homographies, inverse warping, rectification and blended photo mosaics (4A), then Harris corners, ANMS, MOPS-style descriptors, ratio-test matching and RANSAC for automatic stitching (4B).">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3 5 15 8.5V23.5L3 27Z' fill='none' stroke='%237C5E31' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M29 5 17 8.5V23.5L29 27Z' fill='none' stroke='%239C7A46' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
@@ -46,7 +46,7 @@
     <a class="nav-name" href="#top">Andrew&nbsp;Boldi</a>
     <div class="nav-right">
       <nav class="nav-links" aria-label="Sections">
-        <a class="nav-home" href="../">Index</a> <a href="#p1">A.1 <span class="nav-label">· Shoot</span></a> <a href="#p2">A.2 <span class="nav-label">· Homography</span></a> <a href="#p3">A.3 <span class="nav-label">· Warp</span></a> <a href="#p4">A.4 <span class="nav-label">· Mosaic</span></a>
+        <a class="nav-home" href="../">Index</a> <a href="#p1">A.1 <span class="nav-label">· Shoot</span></a> <a href="#p2">A.2 <span class="nav-label">· Homography</span></a> <a href="#p3">A.3 <span class="nav-label">· Warp</span></a> <a href="#p4">A.4 <span class="nav-label">· Mosaic</span></a> <a href="#b1">B.1 <span class="nav-label">· Corners</span></a> <a href="#b2">B.2 <span class="nav-label">· Descriptors</span></a> <a href="#b3">B.3 <span class="nav-label">· Matching</span></a> <a href="#b4">B.4 <span class="nav-label">· RANSAC</span></a>
       </nav>
     </div>
   </header>
@@ -57,10 +57,10 @@
         <section class="hero">
           <p class="eyebrow hero-eyebrow">CS180 · Intro to Computer Vision &amp; Computational Photography · Fall 2026</p>
           <h1 class="hero-title"><span class="line-mask" data-speed="1.05"><span class="line">Image Warping</span></span> <span class="line-mask" data-speed="0.96"><span class="line">&amp; <em class="accent">Mosaicing</em></span></span></h1>
-          <p class="hero-sub" data-speed="0.985">Two photos taken from the same spot are related by a homography. Click matching points, solve for it by least squares, warp one photo into the other's frame by sampling backwards, and blend the two into one wider view.</p>
-          <p class="print-note">This page is interactive: two before/after sliders and a zoom viewer on every image. The live version is at https://andrewboldi.github.io/cs180/proj4a/</p>
+          <p class="hero-sub" data-speed="0.985">Two photos taken from the same spot are related by a homography. Click matching points, solve for it by least squares, warp one photo into the other's frame by sampling backwards, and blend the two into one wider view. Then do it again with no clicking: detect corners, describe and match them, and let RANSAC find the homography.</p>
+          <p class="print-note">This page is interactive: three before/after sliders and a zoom viewer on every image. The live version is at https://andrewboldi.github.io/cs180/proj4a/</p>
           <div class="exif-strip" aria-hidden="true">
-            <span>Proj&nbsp;04A</span><span>Points&nbsp;→&nbsp;H&nbsp;→&nbsp;mosaic</span><span>12&nbsp;pairs&nbsp;·&nbsp;2.1&nbsp;px</span><span>28&nbsp;mm&nbsp;eq.&nbsp;·&nbsp;f/1.8</span><span>Berkeley,&nbsp;CA</span>
+            <span>Proj&nbsp;04A·B</span><span>Corners&nbsp;→&nbsp;matches&nbsp;→&nbsp;H&nbsp;→&nbsp;mosaic</span><span>12&nbsp;pairs&nbsp;·&nbsp;2.1&nbsp;px</span><span>28&nbsp;mm&nbsp;eq.&nbsp;·&nbsp;f/1.8</span><span>Berkeley,&nbsp;CA</span>
           </div>
           <div class="scroll-cue">
             <span>Scroll</span>
@@ -312,6 +312,144 @@
           </div>
         </section>
 
+        <!-- ——————————————————————— Part B.1 ——————————————————————— -->
+        <section class="part" id="b1">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part B.1 · Detect corner features</p>
+            <h2 class="reveal">Thousands of corners, five hundred kept</h2>
+            <p class="lede reveal">Part B finds the correspondences without any clicking, following Brown et al., <em>Multi-Image Matching using Multi-Scale Oriented Patches</em>, at a single scale. Everything runs on the photos resized to 1200 px on the long side. Corners come from the course's Harris code (<span class="mono-inline">get_harris_corners</span>, σ = 1, 20 px border discarded).</p>
+          </header>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_harris_all.jpg" width="900" height="1200" loading="lazy" decoding="async" alt="Every Harris corner in in0, about 27 600 of them, covering the carpet, ceiling and wall"></div>
+              <figcaption>Harris, no ANMS<span class="off">all 27 628 local maxima · in0</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_anms.jpg" width="900" height="1200" loading="lazy" decoding="async" alt="The 500 corners ANMS keeps, spread across the whole photo"></div>
+              <figcaption>After ANMS<span class="off">500 corners · c = 0.9</span></figcaption>
+            </figure>
+          </div>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Suppression radius</h3><span class="math" data-tex="r_i = \min_j \lVert \mathbf{x}_i - \mathbf{x}_j \rVert \quad \text{s.t.} \quad f(\mathbf{x}_i) &lt; c\, f(\mathbf{x}_j), \;\; c = 0.9">rᵢ = min over j of ‖xᵢ − xⱼ‖ such that f(xᵢ) &lt; 0.9 f(xⱼ)</span>
+              <p>Each corner's radius is the distance to the nearest corner that is clearly stronger. ANMS keeps the 500 corners with the largest radii, so the strongest corner in each neighborhood survives, and weak corners survive only where nothing stronger is near.</p>
+            </div>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">How it works</p>
+            <p><span class="mono-inline">peak_local_max</span> with <span class="mono-inline">min_distance=1</span> keeps every local maximum of the Harris response, 27 628 of them in in0. ANMS needs the distance between every pair, so I first keep the 3000 strongest by Harris response (a 3000 × 3000 distance matrix is fine; 27 000 × 27 000 is not). The strongest corners alone bunch up on the ceiling lights and the chair legs. After ANMS the 500 corners cover the whole frame, including the carpet, whose texture has many weak but isolated corners. Spread-out corners matter for the homography: points from only one corner of the overlap would leave the rest of H poorly constrained.</p>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part B.2 ——————————————————————— -->
+        <section class="part" id="b2">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part B.2 · Extract feature descriptors</p>
+            <h2 class="reveal">Forty pixels, sixty-four numbers</h2>
+            <p class="lede reveal">Each corner is described by an axis-aligned 8 × 8 patch sampled every 5 px from the 40 × 40 window around it. The grayscale image is blurred with a Gaussian (σ = 2.5, half the sample spacing) first, so the sparse samples don't alias. Then each descriptor is bias/gain normalized.</p>
+          </header>
+          <figure class="frame frame-wide">
+            <div class="frame-mask"><img src="media/b_desc.jpg" width="800" height="248" loading="lazy" decoding="async" alt="Six features from in0: on top each 40 by 40 color window, below it the normalized 8 by 8 descriptor in gray"></div>
+            <figcaption>Six features from in0<span class="off">top: 40 × 40 window · bottom: normalized 8 × 8 descriptor</span></figcaption>
+          </figure>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Bias / gain normalization</h3><span class="math" data-tex="\mathbf{d} = \frac{\mathbf{p} - \mu_{\mathbf{p}}}{\sigma_{\mathbf{p}}}">d = (p − μ) / σ</span>
+              <p>Subtracting the mean and dividing by the standard deviation makes a descriptor the same under any brightness offset and contrast change, which matters for set 2, where the two exposures differ.</p>
+            </div>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">Why a blurred window</p>
+            <p>Taking the 8 × 8 patch straight from the pixels next to the corner would make it very sensitive to a one-pixel shift in where Harris put the corner. Sampling a blurred 40 × 40 window gives a coarser descriptor that still matches when the corner moves a little or the view changes a bit. The six features above are RANSAC inliers: a chair leg, carpet, the ladder, and the underside of a table.</p>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part B.3 ——————————————————————— -->
+        <section class="part" id="b3">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part B.3 · Match the descriptors</p>
+            <h2 class="reveal">Only when the second best is much worse</h2>
+            <p class="lede reveal">For every descriptor in the left photo I find its nearest and second-nearest descriptors in the right photo by squared error, and keep the match only if the nearest is much closer than the runner-up (Lowe's ratio test).</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Ratio test</h3><span class="math" data-tex="\frac{e_{1\text{-NN}}}{e_{2\text{-NN}}} &lt; 0.4">e₁ₙₙ / e₂ₙₙ &lt; 0.4</span>
+              <p>In Figure 6b of the paper, correct matches mostly have a ratio below about 0.4, while incorrect ones spread from there up to 1. A feature with two near-equal candidates, like one ceiling-tile corner among many identical ones, is ambiguous, and the ratio test throws it out.</p>
+            </div>
+          </div>
+          <figure class="frame frame-wide">
+            <div class="frame-mask"><img src="media/b_matches_in0.jpg" width="1600" height="1057" loading="lazy" decoding="async" alt="in0 and in1 side by side with a line for each of 137 matches: mostly parallel brass lines, a few red outliers crossing them"></div>
+            <figcaption>Matches · set 1<span class="off">137 matches · brass = RANSAC inlier (111) · red = outlier (26)</span></figcaption>
+          </figure>
+          <figure class="frame frame-wide">
+            <div class="frame-mask"><img src="media/b_matches_out0.jpg" width="1600" height="1057" loading="lazy" decoding="async" alt="out0 and out1 side by side with a line for each of 65 matches: about half are brass inliers"></div>
+            <figcaption>Matches · set 2<span class="off">65 matches · brass = RANSAC inlier (32) · red = outlier (33)</span></figcaption>
+          </figure>
+          <div class="notes reveal">
+            <p class="notes-label">What gets through</p>
+            <p>The ratio test removes most bad matches but not all of them. In set 1 the remaining outliers are mostly on the ceiling, where the tile grid and the identical lights repeat. Set 2 has half as many matches and half of those are wrong: it's darker, the two exposures differ, and the forklift is close enough to the camera that it moves against the building behind it (parallax), so its matches don't agree with the same homography as the background's.</p>
+          </div>
+        </section>
+
+        <!-- ——————————————————————— Part B.4 ——————————————————————— -->
+        <section class="part" id="b4">
+          <header class="part-head">
+            <p class="eyebrow reveal">Part B.4 · RANSAC and automatic mosaics</p>
+            <h2 class="reveal">Four points at a time</h2>
+            <p class="lede reveal">RANSAC, written from scratch: pick 4 matches at random, fit an exact homography to them with my <span class="mono-inline">computeH</span> from A.2, and count how many of all the matches it maps to within 2 px of their partner. After 2000 tries, keep the largest such inlier set and refit H to it with least squares. That H goes straight into the blending code from A.4.</p>
+          </header>
+          <div class="formulas reveal">
+            <div class="formula">
+              <h3>Inliers of a 4-point fit</h3><span class="math" data-tex="\mathcal{I}(H) = \{\, i : \lVert H \mathbf{p}_i - \mathbf{p}'_i \rVert &lt; \varepsilon \,\}, \quad \varepsilon = 2\ \text{px}">I(H) = { i : ‖H pᵢ − p′ᵢ‖ &lt; 2 px }</span>
+              <p>With half the matches wrong, a random 4-sample is all inliers with probability about 1/16, so 2000 samples all miss it with probability below 10<sup>−50</sup>.</p>
+            </div>
+            <div class="formula">
+              <h3>Back to the manual frame</h3><span class="math" data-tex="H_{\text{small}} = S\, H_{\text{full}}\, S^{-1}, \quad S = \operatorname{diag}(s, s, 1)">H_small = S H_full S⁻¹</span>
+              <p>To compare with Part A on the same canvas, the hand-clicked H from full-resolution photos is moved into the 1200 px frame with the scale s.</p>
+            </div>
+          </div>
+          <div class="sub-head">
+            <p class="eyebrow reveal">Manual vs. automatic</p>
+            <h3 class="reveal">Set 1 · indoors</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_manual_in0.jpg" width="1436" height="1532" loading="lazy" decoding="async" alt="Indoor mosaic from the 12 hand-clicked pairs"></div>
+              <figcaption>Manual<span class="off">12 clicked pairs (Part A)</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_auto_in0.jpg" width="1447" height="1527" loading="lazy" decoding="async" alt="Indoor mosaic from automatic matching: the same layout, aligned just as well"></div>
+              <figcaption>Automatic<span class="off">111 RANSAC inliers</span></figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <h3 class="reveal">Set 2 · outdoors at dusk</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_manual_out0.jpg" width="1575" height="1600" loading="lazy" decoding="async" alt="Outdoor mosaic from the Part A correspondences"></div>
+              <figcaption>Part A<span class="off">21 SIFT-assisted pairs (see A.2), my computeH</span></figcaption>
+            </figure>
+            <figure class="frame">
+              <div class="frame-mask"><img src="media/b_auto_out0.jpg" width="1580" height="1600" loading="lazy" decoding="async" alt="Outdoor mosaic from automatic matching: forklift and building aligned"></div>
+              <figcaption>Automatic<span class="off">32 RANSAC inliers</span></figcaption>
+            </figure>
+          </div>
+          <div class="sub-head">
+            <h3 class="reveal">Mosaic 3</h3>
+          </div>
+          <div class="result-grid two narrow">
+            <figure class="missing-wrap">
+              <div class="missing">Mosaic 3 · set 3</div>
+              <figcaption>Mosaic 3<span class="off">not shot yet</span></figcaption>
+            </figure>
+          </div>
+          <div class="notes reveal">
+            <p class="notes-label">How they compare</p>
+            <p>The automatic and manual mosaics are hard to tell apart. To put a number on it, I sent the Part A points of each left photo through both homographies (in the 1200 px frame). For set 2 the two H's agree to within 0.97 px on average (2.5 px at most). For set 1 they differ by 4.1 px on average and 12.9 px at the far edge of the overlap. The automatic H is fit to 111 points, many of them on the carpet, while the manual one rests on 12 clicks, mostly on the wall and furniture, so each is a little better at the region its points came from. Neither shows ghosting at the scale of the page. In set 2 the automatic H aligns the building and the forklift as well as the Part A points did, without anyone choosing which plane to follow: RANSAC simply picks the homography that the most matches agree with. Part B's third mosaic needs a third set of photos, which I haven't shot yet.</p>
+          </div>
+        </section>
+
         <!-- ——————————————————————— Takeaway ——————————————————————— -->
         <section class="part" id="learned">
           <header class="part-head">
@@ -319,7 +457,7 @@
             <h2 class="reveal">What I learned</h2>
           </header>
           <div class="notes reveal">
-            <p>Least squares trusts every equation equally. One click on the wrong ceiling-tile corner bent the whole homography, and the fix wasn't more points but finding the bad one, by refitting without each pair in turn. Turning that check into a test meant later correspondence files got checked automatically. Blending was harder than the math made it look. A weighted average is only right if the colors are multiplied by their weights before they're summed. And keeping the weight as a fourth channel that the warp carries along got rid of a lot of offset bookkeeping. The outdoor set also showed how much a homography assumes: anything close to the camera, like the forklift, only lines up if the phone turns without moving.</p>
+            <p>Least squares trusts every equation equally. One click on the wrong ceiling-tile corner bent the whole homography, and the fix wasn't more points but finding the bad one, by refitting without each pair in turn. Turning that check into a test meant later correspondence files got checked automatically. Blending was harder than the math made it look. A weighted average is only right if the colors are multiplied by their weights before they're summed. And keeping the weight as a fourth channel that the warp carries along got rid of a lot of offset bookkeeping. The outdoor set also showed how much a homography assumes: anything close to the camera, like the forklift, only lines up if the phone turns without moving. Part B made the same point from the other side: RANSAC doesn't need every match to be right, only a clear majority that agree, and then it throws out the bad ones on its own, the job I had done by hand for pair 12.</p>
           </div>
         </section>
 
@@ -333,7 +471,7 @@
           <div class="colophon-meta reveal">
             <p>Andrew Boldi — CS180: Intro to Computer Vision &amp; Computational Photography<br>
             UC Berkeley · Fall 2026</p>
-            <p class="colophon-links"><a href="https://cal-cs180.github.io/fa26/hw/proj3/partA.html">Assignment ↗</a> <span aria-hidden="true">·</span> <a href="../">All projects ↗</a></p>
+            <p class="colophon-links"><a href="https://cal-cs180.github.io/fa26/hw/proj3/partA.html">Part A ↗</a> <span aria-hidden="true">·</span> <a href="https://cal-cs180.github.io/fa26/hw/proj3/partB.html">Part B ↗</a> <span aria-hidden="true">·</span> <a href="../">All projects ↗</a></p>
             <p class="colophon-fine">Built with Three.js + GSAP · drag the sliders · click any image to zoom</p>
           </div>
         </footer>
